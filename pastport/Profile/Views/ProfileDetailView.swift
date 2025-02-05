@@ -5,6 +5,7 @@ struct ProfileDetailView: View {
     @StateObject private var viewModel: ProfileViewModel
     @State private var showEditProfile = false
     @State private var showSignOutAlert = false
+    @State private var showVideoFeed = false
     
     init(authViewModel: AuthenticationViewModel) {
         self.authViewModel = authViewModel
@@ -106,6 +107,9 @@ struct ProfileDetailView: View {
                     } else {
                         ProfileVideoGridView(videos: viewModel.userPosts)
                             .padding(.horizontal, 1)
+                            .onTapGesture {
+                                showVideoFeed = true
+                            }
                     }
                 }
             }
@@ -157,6 +161,9 @@ struct ProfileDetailView: View {
                 }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .fullScreenCover(isPresented: $showVideoFeed) {
+                ProfileVideoFeedView(posts: viewModel.userPosts)
             }
         }
     }

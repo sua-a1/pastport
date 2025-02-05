@@ -4,81 +4,97 @@ import AVKit
 struct ProfileVideoGridView: View {
     let videos: [Post]
     let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
+        GridItem(.flexible(), spacing: 1),
+        GridItem(.flexible(), spacing: 1),
+        GridItem(.flexible(), spacing: 1)
     ]
     
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(videos) { post in
-                NavigationLink(destination: VideoPlayerView(post: post)) {
-                    VideoThumbnailView(post: post)
-                        .aspectRatio(9/16, contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                }
+        LazyVGrid(columns: columns, spacing: 1) {
+            ForEach(videos) { video in
+                VideoThumbnailView(video: video)
             }
         }
     }
 }
 
 struct VideoThumbnailView: View {
-    let post: Post
+    let video: Post
     @State private var thumbnailImage: UIImage?
+    @State private var isLoading = true
     
     var body: some View {
-        ZStack {
-            if let thumbnail = thumbnailImage {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(9/16, contentMode: .fill)
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .overlay {
-                        ProgressView()
-                    }
-            }
-            
-            // Video stats overlay
-            VStack {
-                Spacer()
-                HStack {
-                    Image(systemName: "play.fill")
-                        .foregroundColor(.white)
-                    Text("\(post.views)")
-                        .foregroundColor(.white)
-                        .font(.caption)
+        GeometryReader { geometry in
+            ZStack {
+                if let image = thumbnailImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.width)
+                        .clipped()
+                } else if isLoading {
+                    ProgressView()
+                        .frame(width: geometry.size.width, height: geometry.size.width)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: geometry.size.width, height: geometry.size.width)
+                        .overlay {
+                            Image(systemName: "video.fill")
+                                .foregroundColor(.gray)
+                        }
                 }
-                .padding(.bottom, 4)
+                
+                // Video stats overlay
+                VStack {
+                    Spacer()
+                    HStack {
+                        Image(systemName: "play.fill")
+                            .foregroundColor(.white)
+                        Text("\(video.views)")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                    }
+                    .padding(4)
+                    .background(.black.opacity(0.5))
+                    .cornerRadius(4)
+                }
+                .padding(4)
             }
         }
-        .onAppear {
-            generateThumbnail()
+        .aspectRatio(1, contentMode: .fit)
+        .task {
+            await generateThumbnail()
         }
     }
     
-    private func generateThumbnail() {
-        guard let videoURL = URL(string: post.videoUrl) else { return }
-        
-        let asset = AVAsset(url: videoURL)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        
-        // Get thumbnail at 0 seconds
-        let time = CMTime(seconds: 0, preferredTimescale: 1)
-        
-        Task {
-            do {
-                let cgImage = try await imageGenerator.image(at: time).image
-                await MainActor.run {
-                    thumbnailImage = UIImage(cgImage: cgImage)
-                }
-            } catch {
-                print("DEBUG: Failed to generate thumbnail: \(error.localizedDescription)")
-            }
+    private func generateThumbnail() async {
+        guard let videoURL = URL(string: video.videoUrl) else {
+            isLoading = false
+            return
         }
+        
+        do {
+            let asset = AVAsset(url: videoURL)
+            let imageGenerator = AVAssetImageGenerator(asset: asset)
+            imageGenerator.appliesPreferredTrackTransform = true
+            
+            // Generate thumbnail at 0.0 seconds
+            let cgImage = try await imageGenerator.image(at: .zero).image
+            thumbnailImage = UIImage(cgImage: cgImage)
+        } catch {
+            print("DEBUG: Failed to generate thumbnail for video: \(error.localizedDescription)")
+        }
+        
+        isLoading = false
     }
+}
+
+#Preview {
+    ProfileVideoGridView(videos: [
+        Post(id: "test", data: [
+            "videoUrl": "https://example.com/video.mp4",
+            "views": 100
+        ])
+    ])
 } 
