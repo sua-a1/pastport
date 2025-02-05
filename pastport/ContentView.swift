@@ -12,20 +12,17 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if authViewModel.userSession != nil {
-                NavigationStack {
-                    if let user = authViewModel.currentUser {
-                        ProfileDetailView(
-                            user: .constant(user),
-                            authViewModel: authViewModel
-                        )
-                    }
-                }
+            if authViewModel.userSession != nil && authViewModel.currentUser != nil {
+                MainTabView(authViewModel: authViewModel)
             } else {
                 LoginView(authViewModel: authViewModel)
             }
         }
         .preferredColorScheme(.light) // Forces light mode
+        .onAppear {
+            print("DEBUG: Session: \(String(describing: authViewModel.userSession?.uid))")
+            print("DEBUG: Current User: \(String(describing: authViewModel.currentUser?.username))")
+        }
     }
 }
 

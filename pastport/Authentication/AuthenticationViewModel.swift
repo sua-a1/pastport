@@ -2,10 +2,15 @@ import Foundation
 import FirebaseAuth
 import FirebaseFirestore
 
+@MainActor
 class AuthenticationViewModel: ObservableObject {
     // User session state
     @Published var userSession: FirebaseAuth.User?
-    @Published var currentUser: User?
+    @Published var currentUser: User? {
+        didSet {
+            print("DEBUG: Current user updated to: \(currentUser?.username ?? "nil")")
+        }
+    }
     
     // Loading and error states
     @Published var isLoading = false
@@ -87,7 +92,7 @@ class AuthenticationViewModel: ObservableObject {
     // MARK: - Helper Methods
     
     @MainActor
-    private func fetchUser() async {
+    func fetchUser() async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         
         do {
@@ -129,5 +134,15 @@ class AuthenticationViewModel: ObservableObject {
         } else {
             print("DEBUG: User document already exists in Firestore")
         }
+    }
+    
+    @MainActor
+    func updateCurrentUser(_ user: User) async {
+        print("DEBUG: Updating current user to: \(user.username)")
+        self.currentUser = user
+        
+        // Fetch fresh data to ensure UI is up to date
+        await fetchUser()
+        print("DEBUG: Refreshed user data after update")
     }
 } 

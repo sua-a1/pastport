@@ -90,11 +90,12 @@ struct ProfileView: View {
                 Button("Save") {
                     Task {
                         do {
-                            try await profileViewModel.updateProfile(
+                            let updatedUser = try await profileViewModel.updateProfile(
                                 username: username,
                                 bio: bio.isEmpty ? nil : bio,
                                 preferredCategories: Array(selectedCategories)
                             )
+                            onSave(updatedUser)
                         } catch {
                             showError = true
                         }

@@ -13,7 +13,8 @@ class ProfileViewModel: ObservableObject {
         print("DEBUG: ProfileViewModel initialized for user: \(user.id)")
     }
     
-    func updateProfile(username: String, bio: String?, preferredCategories: [String]) async throws {
+    @MainActor
+    func updateProfile(username: String, bio: String?, preferredCategories: [String]) async throws -> User {
         isLoading = true
         defer { isLoading = false }
         
@@ -29,8 +30,13 @@ class ProfileViewModel: ObservableObject {
             let encodedUser = try Firestore.Encoder().encode(updatedUser)
             try await Firestore.firestore().collection("users").document(user.id).updateData(encodedUser)
             
+            // Fetch fresh user data to ensure consistency
+            let snapshot = try await Firestore.firestore().collection("users").document(user.id).getDocument()
+            updatedUser = try snapshot.data(as: User.self)
             self.user = updatedUser
-            print("DEBUG: Updated profile for user: \(user.id)")
+            
+            print("DEBUG: Updated profile for user: \(user.id) with username: \(username)")
+            return updatedUser
         } catch {
             errorMessage = error.localizedDescription
             print("DEBUG: Failed to update profile: \(error.localizedDescription)")

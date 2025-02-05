@@ -10,10 +10,14 @@ struct ProfileEditView: View {
     @State private var showError = false
     @State private var showSuccess = false
     @State private var selectedImage: PhotosPickerItem?
+    let user: User
+    let onSave: (User) -> Void
     
     private let categories = ["History", "Mythology", "Ancient Civilizations", "Folklore", "Legends"]
     
-    init(user: User) {
+    init(user: User, onSave: @escaping (User) -> Void) {
+        self.user = user
+        self.onSave = onSave
         let viewModel = ProfileViewModel(user: user)
         _profileViewModel = StateObject(wrappedValue: viewModel)
         _username = State(initialValue: user.username)
@@ -91,12 +95,12 @@ struct ProfileEditView: View {
                 Button("Save") {
                     Task {
                         do {
-                            try await profileViewModel.updateProfile(
+                            let updatedUser = try await profileViewModel.updateProfile(
                                 username: username,
                                 bio: bio.isEmpty ? nil : bio,
                                 preferredCategories: Array(selectedCategories)
                             )
-                            showSuccess = true
+                            onSave(updatedUser)
                         } catch {
                             showError = true
                         }

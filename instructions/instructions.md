@@ -25,7 +25,7 @@ Pastport is a TikTok-like platform that allows creators to engage in historical,
 
 1. User Authentication & Profiles – Secure sign-up/login using Firebase Auth.
 
-2. Video Upload & Processing – Users upload videos, optimized via Cloudinary.
+2. Video Creation, Upload & Processing – Users upload videos, optimized via Cloudinary.
 
 3. Text-Based Drafting – Users create unpublished text drafts with multimedia attachments. (Fully implementedd in Week 2)
 

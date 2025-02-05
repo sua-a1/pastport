@@ -8,5 +8,9 @@
 	<array>
 		<dict/>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to record videos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record audio in videos.</string>
 </dict>
 </plist>
