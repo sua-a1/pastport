@@ -1,6 +1,7 @@
 import AVFoundation
 import Photos
 import UIKit
+import AVKit
 
 protocol RecordingDelegate: AnyObject {
     func finishRecording(_ videoURL: URL?, _ err: Error?)
@@ -22,13 +23,16 @@ protocol RecordingDelegate: AnyObject {
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var currentCameraInput: AVCaptureDeviceInput?
     private var photoLibrary: PHPhotoLibrary?
+    private var documentsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
     
     // MARK: - Computed Properties
     private var tempFilePath: URL {
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("tempVideo\(Date())")
+        let timestamp = Int(Date().timeIntervalSince1970)
+        return documentsDirectory
+            .appendingPathComponent("recording_\(timestamp)")
             .appendingPathExtension("mp4")
-        return tempURL
     }
     
     // MARK: - Initialization
@@ -220,6 +224,71 @@ protocol RecordingDelegate: AnyObject {
         movieOutput?.stopRecording()
     }
     
+    // MARK: - Video Processing
+    private func compressVideo(at sourceURL: URL) async throws -> URL {
+        print("DEBUG: Starting video compression")
+        let startTime = Date()
+        
+        let asset = AVAsset(url: sourceURL)
+        let duration = try await asset.load(.duration)
+        let size = try await asset.load(.tracks).first?.load(.naturalSize) ?? .zero
+        
+        print("DEBUG: Original video - Duration: \(duration.seconds)s, Size: \(size)")
+        
+        // Create compression configuration
+        let preset = AVAssetExportPresetMediumQuality
+        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
+            print("DEBUG: Failed to create export session")
+            throw VideoUploadError.compressionFailed
+        }
+        
+        // Set output URL in documents directory
+        let compressedURL = documentsDirectory
+            .appendingPathComponent("compressed_\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        
+        // Configure export session
+        session.outputURL = compressedURL
+        session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
+        
+        // Export the video
+        await session.export()
+        
+        // Check export status
+        switch session.status {
+        case .completed:
+            let endTime = Date()
+            let compressionTime = endTime.timeIntervalSince(startTime)
+            
+            // Get file sizes for comparison
+            let originalSize = try FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size] as? Int64 ?? 0
+            let compressedSize = try FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int64 ?? 0
+            
+            print("""
+                DEBUG: Video compression completed
+                - Time taken: \(String(format: "%.2f", compressionTime))s
+                - Original size: \(originalSize / 1024 / 1024)MB
+                - Compressed size: \(compressedSize / 1024 / 1024)MB
+                - Reduction: \(String(format: "%.1f", (1 - Double(compressedSize) / Double(originalSize)) * 100))%
+                """)
+            
+            return compressedURL
+            
+        case .failed:
+            print("DEBUG: Export failed: \(session.error?.localizedDescription ?? "Unknown error")")
+            throw VideoUploadError.compressionFailed
+            
+        case .cancelled:
+            print("DEBUG: Export cancelled")
+            throw VideoUploadError.compressionFailed
+            
+        default:
+            print("DEBUG: Export ended with status: \(session.status.rawValue)")
+            throw VideoUploadError.compressionFailed
+        }
+    }
+    
     // MARK: - AVCaptureFileOutputRecordingDelegate
     func fileOutput(_ output: AVCaptureFileOutput, 
                    didFinishRecordingTo outputFileURL: URL, 
@@ -229,8 +298,28 @@ protocol RecordingDelegate: AnyObject {
             print("DEBUG: Recording failed: \(error.localizedDescription)")
         } else {
             print("DEBUG: Recording finished successfully")
-            lastRecordedVideoURL = outputFileURL
-            showVideoPostingView = true
+            Task {
+                do {
+                    // First compress the video
+                    let compressedURL = try await compressVideo(at: outputFileURL)
+                    print("DEBUG: Video compressed successfully")
+                    
+                    // Move the compressed video to final location
+                    let finalURL = tempFilePath
+                    if FileManager.default.fileExists(atPath: finalURL.path) {
+                        try FileManager.default.removeItem(at: finalURL)
+                    }
+                    try FileManager.default.moveItem(at: compressedURL, to: finalURL)
+                    print("DEBUG: Moved compressed recording to documents directory: \(finalURL.path)")
+                    
+                    await MainActor.run {
+                        lastRecordedVideoURL = finalURL
+                        showVideoPostingView = true
+                    }
+                } catch {
+                    print("DEBUG: Failed to process recording: \(error.localizedDescription)")
+                }
+            }
         }
     }
     
@@ -289,7 +378,51 @@ protocol RecordingDelegate: AnyObject {
     
     // MARK: - Video Selection
     func handleSelectedVideo(_ url: URL) {
-        lastRecordedVideoURL = url
-        showVideoPostingView = true
+        Task {
+            do {
+                // First compress the video
+                let compressedURL = try await compressVideo(at: url)
+                print("DEBUG: Video compressed successfully")
+                
+                // Move to final location
+                let finalURL = tempFilePath
+                if FileManager.default.fileExists(atPath: finalURL.path) {
+                    try FileManager.default.removeItem(at: finalURL)
+                }
+                try FileManager.default.moveItem(at: compressedURL, to: finalURL)
+                print("DEBUG: Moved compressed video to documents directory: \(finalURL.path)")
+                
+                await MainActor.run {
+                    lastRecordedVideoURL = finalURL
+                    showVideoPostingView = true
+                }
+            } catch {
+                print("DEBUG: Failed to process selected video: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // Clean up old recordings
+    private func cleanupOldRecordings() {
+        do {
+            let fileManager = FileManager.default
+            let files = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let recordings = files.filter { $0.pathExtension == "mp4" }
+            
+            // Keep only the 5 most recent recordings
+            if recordings.count > 5 {
+                let sortedRecordings = recordings.sorted { $0.lastPathComponent > $1.lastPathComponent }
+                for recording in sortedRecordings[5...] {
+                    try fileManager.removeItem(at: recording)
+                    print("DEBUG: Cleaned up old recording: \(recording.lastPathComponent)")
+                }
+            }
+        } catch {
+            print("DEBUG: Failed to cleanup old recordings: \(error.localizedDescription)")
+        }
+    }
+    
+    deinit {
+        cleanupOldRecordings()
     }
 }

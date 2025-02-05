@@ -1,6 +1,8 @@
 import SwiftUI
 import AVKit
 import PhotosUI
+import Firebase
+import FirebaseAuth
 
 struct VideoPostingView: View {
     let videoURL: URL
@@ -8,13 +10,19 @@ struct VideoPostingView: View {
     @State private var isUploading = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showSuccessAlert = false
     @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer
     @State private var videoUploader = VideoUploader()
+    @Binding var showCameraView: Bool
+    @Binding var selectedTab: Int
+    @State private var navigateToProfile = false
     
-    init(videoURL: URL) {
+    init(videoURL: URL, showCameraView: Binding<Bool>, selectedTab: Binding<Int>) {
         self.videoURL = videoURL
         _player = State(initialValue: AVPlayer(url: videoURL))
+        _showCameraView = showCameraView
+        _selectedTab = selectedTab
     }
     
     var body: some View {
@@ -51,6 +59,16 @@ struct VideoPostingView: View {
                                 }
                                 .progressViewStyle(.linear)
                                 .padding()
+                                
+                                // Add cancel button during upload
+                                if isUploading {
+                                    Button("Cancel Upload", role: .destructive) {
+                                        // TODO: Implement cancel functionality
+                                        isUploading = false
+                                        dismiss()
+                                    }
+                                    .padding()
+                                }
                             }
                             .padding()
                         }
@@ -62,9 +80,13 @@ struct VideoPostingView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        dismiss()
+                        if isUploading {
+                            showError = true
+                            errorMessage = "Please wait for the upload to complete or cancel it"
+                        } else {
+                            dismiss()
+                        }
                     }
-                    .disabled(isUploading)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -74,55 +96,65 @@ struct VideoPostingView: View {
                     .disabled(isUploading || caption.isEmpty)
                 }
             }
-        }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage)
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .alert("Success", isPresented: $showSuccessAlert) {
+                Button("View Profile") {
+                    dismiss()
+                    showCameraView = false
+                    selectedTab = 4  // Switch to profile tab
+                }
+                Button("Done") {
+                    dismiss()
+                    showCameraView = false
+                }
+            } message: {
+                Text("Your video has been posted successfully!")
+            }
         }
         .interactiveDismissDisabled(isUploading)
         .presentationBackground(.background)
-    }
-    
-    private func uploadVideo() {
-        isUploading = true
-        
-        // First save to photo library
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            guard status == .authorized else {
-                handleError("Photo library access required to save video")
-                return
-            }
-            
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
-            }) { success, error in
-                if let error = error {
-                    handleError(error.localizedDescription)
-                    return
-                }
-                
-                // Then upload to Firebase
-                Task {
-                    do {
-                        _ = try await videoUploader.uploadVideo(url: videoURL, caption: caption)
-                        await MainActor.run {
-                            isUploading = false
-                            dismiss()
-                        }
-                    } catch {
-                        handleError(error.localizedDescription)
-                    }
-                }
+        .fullScreenCover(isPresented: $navigateToProfile) {
+            if let user = Auth.auth().currentUser {
+                ProfileDetailView(authViewModel: AuthenticationViewModel())
             }
         }
     }
     
-    private func handleError(_ message: String) {
-        Task { @MainActor in
-            errorMessage = message
-            showError = true
-            isUploading = false
+    private func uploadVideo() {
+        print("DEBUG: Starting video upload in VideoPostingView")
+        print("DEBUG: Video URL: \(videoURL)")
+        print("DEBUG: Video exists: \(FileManager.default.fileExists(atPath: videoURL.path))")
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: videoURL.path) {
+            print("DEBUG: Video file attributes: \(attributes)")
+        }
+        
+        isUploading = true
+        
+        Task {
+            do {
+                print("DEBUG: Attempting to upload video")
+                let url = try await videoUploader.uploadVideo(url: videoURL, caption: caption)
+                print("DEBUG: Video upload completed successfully with URL: \(url)")
+                await MainActor.run {
+                    isUploading = false
+                    showSuccessAlert = true
+                }
+            } catch {
+                print("DEBUG: Video upload failed with error: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("DEBUG: Error details - Domain: \(nsError.domain), Code: \(nsError.code)")
+                    print("DEBUG: Error user info: \(nsError.userInfo)")
+                }
+                await MainActor.run {
+                    isUploading = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
+            }
         }
     }
 } 

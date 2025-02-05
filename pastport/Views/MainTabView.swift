@@ -51,7 +51,7 @@ struct MainTabView: View {
             }
         }
         .sheet(isPresented: $showVideoCreation) {
-            VideoRecordingView()
+            VideoRecordingView(showCameraView: $showVideoCreation, selectedTab: $selectedTab)
         }
     }
 }

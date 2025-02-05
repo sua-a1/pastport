@@ -10,6 +10,8 @@ struct VideoRecordingView: View {
     @State private var showPhotoPicker = false
     @State private var selectedItem: PhotosPickerItem?
     @Environment(\.dismiss) private var dismiss
+    @Binding var showCameraView: Bool
+    @Binding var selectedTab: Int
     
     // MARK: - Video Tools
     enum VideoTool {
@@ -110,7 +112,9 @@ struct VideoRecordingView: View {
         }
         .fullScreenCover(isPresented: $cameraManager.showVideoPostingView) {
             if let videoURL = cameraManager.lastRecordedVideoURL {
-                VideoPostingView(videoURL: videoURL)
+                VideoPostingView(videoURL: videoURL, 
+                               showCameraView: $showCameraView,
+                               selectedTab: $selectedTab)
                     .presentationDragIndicator(.visible)
             }
         }
@@ -249,4 +253,8 @@ struct ToolButton: View {
         case .album: return "Album"
         }
     }
+}
+
+#Preview {
+    VideoRecordingView(showCameraView: .constant(true), selectedTab: .constant(0))
 } 
