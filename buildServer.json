@@ -1,0 +1,19 @@
+{
+	"name": "xcode build server",
+	"version": "0.2",
+	"bspVersion": "2.0",
+	"languages": [
+		"c",
+		"cpp",
+		"objective-c",
+		"objective-cpp",
+		"swift"
+	],
+	"argv": [
+		"/opt/homebrew/bin/xcode-build-server"
+	],
+	"workspace": "/Users/sudea/Desktop/pastport/pastport.xcodeproj/project.xcworkspace",
+	"build_root": "/Users/sudea/Library/Developer/Xcode/DerivedData/pastport-bgmgbwldtocqxvhdohrkzqpkgmwa",
+	"scheme": "pastport",
+	"kind": "xcode"
+}

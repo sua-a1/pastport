@@ -8,14 +8,24 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var authViewModel = AuthenticationViewModel()
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if authViewModel.userSession != nil {
+                NavigationStack {
+                    if let user = authViewModel.currentUser {
+                        ProfileDetailView(
+                            user: .constant(user),
+                            authViewModel: authViewModel
+                        )
+                    }
+                }
+            } else {
+                LoginView(authViewModel: authViewModel)
+            }
         }
-        .padding()
+        .preferredColorScheme(.light) // Forces light mode
     }
 }
 

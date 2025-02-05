@@ -1,0 +1,56 @@
+# Tech Stack
+
+- Swift
+- SwiftUI
+- Firebase
+- Firebase Auth
+- Firebase Firestore
+- Firebase Storage
+- Firebase Functions
+- Firebase Analytics
+- Firebase Crashlytics
+- Firebase Cloud Messaging
+- Firebase Cloud Storage
+- SwiftData for local storage
+
+# Project Structure
+
+├── buildServer.json
+├── pastport
+│   ├── Assets.xcassets
+│   │   ├── AccentColor.colorset
+│   │   ├── AppIcon.appiconset
+│   │   └── Contents.json
+│   ├── ContentView.swift
+│   ├── Info.plist
+│   ├── Preview Content
+│   │   └── Preview Assets.xcassets
+│   └── pastportApp.swift
+├── pastport.xcodeproj
+│   ├── project.pbxproj
+│   ├── project.xcworkspace
+│   │   ├── contents.xcworkspacedata
+│   │   ├── xcshareddata
+│   │   └── xcuserdata
+│   └── xcuserdata
+│       └── sudea.xcuserdatad
+├── pastportTests
+│   └── pastportTests.swift
+└── pastportUITests
+    ├── pastportUITests.swift
+    └── pastportUITestsLaunchTests.swift
+
+
+# Swift Specific Rules 
+
+- Use appropriate property wrappers and macros
+    - Annotate view models with @Observable e.g. @Observable final class MyModel
+    - Do not use @State in the SwiftUI View for view model observation. Instead, use 'let model: MyModel'
+    - For reference types state shared with a child view, pass the dependency to the constructor of the child view.
+    - For value type state shared with a child view, use SwiftUI bindings if and only if the child needs write access to the state..
+    - For value type state shared with a child view, pass the value if the child view only needs read access to the state.
+    - Use an @Environment for state that should be shared throughout the app.
+    - Use '@State' only for local state that is managed by the view itself.
+Other rules in @swift
+## Firebase Rules
+Firebase rules in @firebase
