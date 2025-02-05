@@ -2,124 +2,170 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
-    @State private var profileViewModel: ProfileViewModel
+    @StateObject var viewModel: ProfileViewModel
+    @State private var showingEditProfile = false
+    
+    var body: some View {
+        NavigationStack {
+            ProfileFormView(viewModel: viewModel)
+                .navigationTitle("Edit Profile")
+                .sheet(isPresented: $showingEditProfile) {
+                    ProfileEditView(user: viewModel.user) { updatedUser in
+                        Task {
+                            try? await viewModel.updateProfile(
+                                username: updatedUser.username,
+                                bio: updatedUser.bio,
+                                preferredCategories: updatedUser.preferredCategories
+                            )
+                        }
+                        showingEditProfile = false
+                    }
+                }
+        }
+    }
+}
+
+// MARK: - Profile Form View
+struct ProfileFormView: View {
+    @ObservedObject var viewModel: ProfileViewModel
     @State private var username: String
     @State private var bio: String
     @State private var selectedCategories: Set<String> = []
     @State private var showError = false
-    @State private var showImagePicker = false
     @State private var selectedImage: PhotosPickerItem?
     
     private let categories = ["History", "Mythology", "Ancient Civilizations", "Folklore", "Legends"]
     
-    init(user: User) {
-        let viewModel = ProfileViewModel(user: user)
-        _profileViewModel = State(initialValue: viewModel)
-        _username = State(initialValue: user.username)
-        _bio = State(initialValue: user.bio ?? "")
-        if !user.preferredCategories.isEmpty {
-            _selectedCategories = State(initialValue: Set(user.preferredCategories))
-        }
+    init(viewModel: ProfileViewModel) {
+        self.viewModel = viewModel
+        _username = State(initialValue: viewModel.user.username)
+        _bio = State(initialValue: viewModel.user.bio ?? "")
+        _selectedCategories = State(initialValue: Set(viewModel.user.preferredCategories))
     }
     
     var body: some View {
         Form {
-            Section("Profile Photo") {
-                HStack {
-                    if let imageUrl = profileViewModel.user.profileImageUrl,
-                       let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 80, height: 80)
-                        .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .frame(width: 80, height: 80)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    PhotosPicker(selection: $selectedImage,
-                               matching: .images) {
-                        Text("Change Photo")
-                    }
-                }
-            }
-            
-            Section("Basic Info") {
-                TextField("Username", text: $username)
-                    .textInputAutocapitalization(.never)
-                TextField("Bio", text: $bio, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-            
-            Section("Interests") {
-                ForEach(categories, id: \.self) { category in
-                    Toggle(category, isOn: Binding(
-                        get: { selectedCategories.contains(category) },
-                        set: { isSelected in
-                            if isSelected {
-                                selectedCategories.insert(category)
-                            } else {
-                                selectedCategories.remove(category)
-                            }
-                        }
-                    ))
-                }
-            }
-            
-            Section("Account Info") {
-                LabeledContent("Email", value: profileViewModel.user.email)
-                LabeledContent("Member Since", value: profileViewModel.user.dateJoined.formatted(date: .abbreviated, time: .omitted))
-            }
-            
-            Section("Stats") {
-                LabeledContent("Posts", value: "\(profileViewModel.user.postsCount)")
-                LabeledContent("Followers", value: "\(profileViewModel.user.followersCount)")
-                LabeledContent("Following", value: "\(profileViewModel.user.followingCount)")
-            }
-        }
-        .navigationTitle("Edit Profile")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save") {
-                    Task {
-                        do {
-                            let updatedUser = try await profileViewModel.updateProfile(
-                                username: username,
-                                bio: bio.isEmpty ? nil : bio,
-                                preferredCategories: Array(selectedCategories)
-                            )
-                            onSave(updatedUser)
-                        } catch {
-                            showError = true
-                        }
-                    }
-                }
-                .disabled(profileViewModel.isLoading)
-            }
-        }
-        .alert("Error", isPresented: $showError) {
-            Button("OK") { }
-        } message: {
-            Text(profileViewModel.errorMessage ?? "An error occurred")
+            ProfilePhotoSection(viewModel: viewModel, selectedImage: $selectedImage)
+            BasicInfoSection(username: $username, bio: $bio)
+            InterestsSection(categories: categories, selectedCategories: $selectedCategories)
+            AccountInfoSection(user: viewModel.user)
+            StatsSection(user: viewModel.user)
         }
         .onChange(of: selectedImage) { _, newValue in
-            guard let newValue else { return }
-            Task {
-                do {
-                    if let data = try await newValue.loadTransferable(type: Data.self) {
-                        let _ = try await profileViewModel.uploadProfileImage(data)
-                    }
-                } catch {
-                    showError = true
+            handleImageSelection(newValue)
+        }
+    }
+    
+    private func handleImageSelection(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+        Task {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    let _ = try await viewModel.uploadProfileImage(data)
+                }
+            } catch {
+                showError = true
+            }
+        }
+    }
+}
+
+// MARK: - Profile Sections
+struct ProfilePhotoSection: View {
+    @ObservedObject var viewModel: ProfileViewModel
+    @Binding var selectedImage: PhotosPickerItem?
+    
+    var body: some View {
+        Section("Profile Photo") {
+            HStack {
+                ProfileImageView(imageUrl: viewModel.user.profileImageUrl)
+                PhotosPicker(selection: $selectedImage, matching: .images) {
+                    Text("Change Photo")
                 }
             }
+        }
+    }
+}
+
+struct BasicInfoSection: View {
+    @Binding var username: String
+    @Binding var bio: String
+    
+    var body: some View {
+        Section("Basic Info") {
+            TextField("Username", text: $username)
+                .textInputAutocapitalization(.never)
+            TextField("Bio", text: $bio, axis: .vertical)
+                .lineLimit(3...6)
+        }
+    }
+}
+
+struct InterestsSection: View {
+    let categories: [String]
+    @Binding var selectedCategories: Set<String>
+    
+    var body: some View {
+        Section("Interests") {
+            ForEach(categories, id: \.self) { category in
+                Toggle(category, isOn: Binding(
+                    get: { selectedCategories.contains(category) },
+                    set: { isSelected in
+                        if isSelected {
+                            selectedCategories.insert(category)
+                        } else {
+                            selectedCategories.remove(category)
+                        }
+                    }
+                ))
+            }
+        }
+    }
+}
+
+struct AccountInfoSection: View {
+    let user: User
+    
+    var body: some View {
+        Section("Account Info") {
+            LabeledContent("Email", value: user.email)
+            LabeledContent("Member Since", value: user.dateJoined.formatted(date: .abbreviated, time: .omitted))
+        }
+    }
+}
+
+struct StatsSection: View {
+    let user: User
+    
+    var body: some View {
+        Section("Stats") {
+            LabeledContent("Posts", value: "\(user.postsCount)")
+            LabeledContent("Followers", value: "\(user.followersCount)")
+            LabeledContent("Following", value: "\(user.followingCount)")
+        }
+    }
+}
+
+struct ProfileImageView: View {
+    let imageUrl: String?
+    
+    var body: some View {
+        if let imageUrl = imageUrl,
+           let url = URL(string: imageUrl) {
+            AsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                ProgressView()
+            }
+            .frame(width: 80, height: 80)
+            .clipShape(Circle())
+        } else {
+            Image(systemName: "person.circle.fill")
+                .resizable()
+                .frame(width: 80, height: 80)
+                .foregroundColor(.gray)
         }
     }
 } 

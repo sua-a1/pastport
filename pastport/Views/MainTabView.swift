@@ -21,14 +21,16 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            Button {
-                showVideoCreation = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 21))
+            Button(action: { showVideoCreation = true }) {
+                Image(systemName: "plus.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 45, height: 45)
+                    .foregroundStyle(.white, .blue)
             }
             .tabItem {
                 Image(systemName: "plus")
+                Text("Create")
             }
             .tag(2)
             
@@ -39,15 +41,17 @@ struct MainTabView: View {
                 }
                 .tag(3)
             
-            ProfileDetailView(authViewModel: authViewModel)
-                .tabItem {
-                    Image(systemName: "person")
-                    Text("Me")
-                }
-                .tag(4)
+            if let user = authViewModel.currentUser {
+                ProfileDetailView(authViewModel: authViewModel)
+                    .tabItem {
+                        Image(systemName: "person")
+                        Text("Profile")
+                    }
+                    .tag(4)
+            }
         }
         .sheet(isPresented: $showVideoCreation) {
-            VideoCreationView()
+            VideoRecordingView()
         }
     }
 }
