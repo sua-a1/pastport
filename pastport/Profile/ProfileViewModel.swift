@@ -7,10 +7,14 @@ class ProfileViewModel: ObservableObject {
     @Published var user: User
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var userPosts: [Post] = []
     
     init(user: User) {
         self.user = user
         print("DEBUG: ProfileViewModel initialized for user: \(user.id)")
+        Task {
+            await fetchUserPosts()
+        }
     }
     
     @MainActor
@@ -79,6 +83,30 @@ class ProfileViewModel: ObservableObject {
             print("DEBUG: Failed to upload image: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             throw error
+        }
+    }
+    
+    @MainActor
+    func fetchUserPosts() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("users")
+                .document(user.id)
+                .collection("posts")
+                .order(by: "timestamp", descending: true)
+                .getDocuments()
+            
+            userPosts = snapshot.documents.map { doc in
+                Post(id: doc.documentID, data: doc.data())
+            }
+            
+            print("DEBUG: Fetched \(userPosts.count) posts for user: \(user.id)")
+        } catch {
+            print("DEBUG: Failed to fetch user posts: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
         }
     }
 } 

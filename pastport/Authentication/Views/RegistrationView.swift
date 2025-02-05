@@ -41,6 +41,28 @@ struct RegistrationView: View {
             }
             
             Button {
+                print("DEBUG: Sign up button tapped")
+                print("DEBUG: Username: \(username)")
+                print("DEBUG: Email: \(email)")
+                
+                guard !username.isEmpty else {
+                    authViewModel.errorMessage = "Username is required"
+                    showError = true
+                    return
+                }
+                
+                guard !email.isEmpty else {
+                    authViewModel.errorMessage = "Email is required"
+                    showError = true
+                    return
+                }
+                
+                guard !password.isEmpty else {
+                    authViewModel.errorMessage = "Password is required"
+                    showError = true
+                    return
+                }
+                
                 Task {
                     do {
                         try await authViewModel.createUser(
@@ -48,7 +70,12 @@ struct RegistrationView: View {
                             password: password,
                             username: username
                         )
+                        print("DEBUG: User created successfully")
+                        await MainActor.run {
+                            dismiss()
+                        }
                     } catch {
+                        print("DEBUG: Sign up failed: \(error.localizedDescription)")
                         showError = true
                     }
                 }

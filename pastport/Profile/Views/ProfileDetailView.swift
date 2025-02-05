@@ -1,146 +1,163 @@
 import SwiftUI
 
 struct ProfileDetailView: View {
-    @ObservedObject var authViewModel: AuthenticationViewModel
+    let authViewModel: AuthenticationViewModel
+    @StateObject private var viewModel: ProfileViewModel
     @State private var showEditProfile = false
     @State private var showSignOutAlert = false
     
+    init(authViewModel: AuthenticationViewModel) {
+        self.authViewModel = authViewModel
+        self._viewModel = StateObject(wrappedValue: ProfileViewModel(user: authViewModel.currentUser!))
+    }
+    
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // Profile Header
-                VStack(spacing: 16) {
-                    if let imageUrl = authViewModel.currentUser?.profileImageUrl,
-                       let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { image in
-                            image
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Profile Header
+                    VStack(spacing: 15) {
+                        // Profile Image
+                        if let imageUrl = viewModel.user.profileImageUrl,
+                           let url = URL(string: imageUrl) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                ProgressView()
+                            }
+                            .frame(width: 100, height: 100)
+                            .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.circle.fill")
                                 .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            ProgressView()
+                                .frame(width: 100, height: 100)
+                                .foregroundColor(.gray)
                         }
-                        .frame(width: 120, height: 120)
-                        .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .frame(width: 120, height: 120)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    if let user = authViewModel.currentUser {
-                        Text(user.username)
-                            .font(.title2)
-                            .bold()
                         
-                        if let bio = user.bio {
-                            Text(bio)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
+                        // Username and Bio
+                        VStack(spacing: 8) {
+                            Text(viewModel.user.username)
+                                .font(.title2)
+                                .bold()
+                            
+                            if let bio = viewModel.user.bio {
+                                Text(bio)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
                         }
                         
                         // Stats
                         HStack(spacing: 40) {
                             VStack {
-                                Text("\(user.postsCount)")
+                                Text("\(viewModel.userPosts.count)")
                                     .font(.headline)
                                 Text("Posts")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             
                             VStack {
-                                Text("\(user.followersCount)")
+                                Text("0")
                                     .font(.headline)
                                 Text("Followers")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             
                             VStack {
-                                Text("\(user.followingCount)")
+                                Text("0")
                                     .font(.headline)
                                 Text("Following")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                         }
-                        .padding()
+                        .padding(.top, 8)
                         
-                        // Categories
-                        if !user.preferredCategories.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack {
-                                    ForEach(user.preferredCategories, id: \.self) { category in
-                                        Text(category)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.blue.opacity(0.1))
-                                            .cornerRadius(20)
-                                    }
+                        // Edit Profile Button
+                        Button(action: { showEditProfile = true }) {
+                            Text("Edit Profile")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(width: 180, height: 32)
+                                .foregroundColor(.black)
+                                .background(Color(.systemGray5))
+                                .cornerRadius(6)
+                        }
+                    }
+                    .padding(.top)
+                    
+                    // Video Grid
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    } else if viewModel.userPosts.isEmpty {
+                        Text("No videos yet")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    } else {
+                        ProfileVideoGridView(videos: viewModel.userPosts)
+                            .padding(.horizontal, 1)
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showSignOutAlert = true }) {
+                        Text("Sign Out")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .sheet(isPresented: $showEditProfile) {
+                NavigationView {
+                    ProfileEditView(user: viewModel.user) { updatedUser in
+                        Task {
+                            do {
+                                try await viewModel.updateProfile(
+                                    username: updatedUser.username,
+                                    bio: updatedUser.bio,
+                                    preferredCategories: updatedUser.preferredCategories
+                                )
+                                await MainActor.run {
+                                    showEditProfile = false
                                 }
-                                .padding(.horizontal)
+                            } catch {
+                                print("DEBUG: Failed to update profile: \(error.localizedDescription)")
                             }
                         }
                     }
-                    
-                    // Edit Profile Button
-                    Button {
-                        showEditProfile = true
-                    } label: {
-                        Text("Edit Profile")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(width: 150)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-                    }
-                    .padding(.top, 8)
-                }
-                .padding()
-            }
-        }
-        .navigationTitle("Profile")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button("Sign Out", role: .destructive) {
-                        showSignOutAlert = true
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
                 }
             }
-        }
-        .sheet(isPresented: $showEditProfile) {
-            NavigationStack {
-                if let user = authViewModel.currentUser {
-                    ProfileEditView(user: user) { updatedUser in
-                        Task {
-                            await authViewModel.updateCurrentUser(updatedUser)
-                            showEditProfile = false
-                        }
+            .refreshable {
+                await viewModel.fetchUserPosts()
+            }
+            .onChange(of: showEditProfile) { _, isPresented in
+                if !isPresented {
+                    Task {
+                        await viewModel.fetchUserPosts()
                     }
                 }
             }
-        }
-        .refreshable {
-            await authViewModel.fetchUser()
-        }
-        .onChange(of: showEditProfile) { _, isPresented in
-            if !isPresented {
-                Task {
-                    await authViewModel.fetchUser()
+            .alert("Sign Out", isPresented: $showSignOutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        await authViewModel.signOut()
+                    }
                 }
+            } message: {
+                Text("Are you sure you want to sign out?")
             }
-        }
-        .alert("Sign Out", isPresented: $showSignOutAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Sign Out", role: .destructive) {
-                authViewModel.signOut()
-            }
-        } message: {
-            Text("Are you sure you want to sign out?")
         }
     }
 } 
