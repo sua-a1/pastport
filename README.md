@@ -1,5 +1,5 @@
 # Pastport - TikTok for Historical & Mythological Storytelling
-
+![image](https://github.com/user-attachments/assets/2b46351c-f0a8-4ccc-808f-81a0792a6bd5)
 ## Implemented Features
 
 ### 1. User Authentication & Profiles ✅
