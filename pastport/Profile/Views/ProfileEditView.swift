@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import FirebaseFirestore
 
 struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
@@ -128,7 +129,18 @@ struct ProfileEditView: View {
                     print("DEBUG: Loading image data")
                     if let data = try await newValue.loadTransferable(type: Data.self) {
                         print("DEBUG: Image data loaded, size: \(data.count) bytes")
-                        try await profileViewModel.uploadProfileImage(data)
+                        // Get the updated URL from the upload
+                        let imageUrl = try await profileViewModel.uploadProfileImage(data)
+                        print("DEBUG: Successfully got image URL: \(imageUrl)")
+                        
+                        // Immediately update the current user and notify parent
+                        var updatedUser = profileViewModel.user
+                        updatedUser.profileImageUrl = imageUrl
+                        
+                        await MainActor.run {
+                            profileViewModel.user = updatedUser
+                            onSave(updatedUser) // Notify parent view immediately
+                        }
                     } else {
                         print("DEBUG: Failed to load image data")
                         showError = true

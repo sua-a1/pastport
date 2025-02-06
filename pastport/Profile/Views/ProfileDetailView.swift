@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseFirestore
 
 struct ProfileDetailView: View {
     let authViewModel: AuthenticationViewModel
@@ -79,17 +80,6 @@ struct ProfileDetailView: View {
                             }
                         }
                         .padding(.top, 8)
-                        
-                        // Edit Profile Button
-                        Button(action: { showEditProfile = true }) {
-                            Text("Edit Profile")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(width: 180, height: 32)
-                                .foregroundColor(.black)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(6)
-                        }
                     }
                     .padding(.top)
                     
@@ -105,20 +95,24 @@ struct ProfileDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                     } else {
-                        ProfileVideoGridView(videos: viewModel.userPosts)
+                        ProfileVideoGridView(videos: viewModel.userPosts, showVideoFeed: $showVideoFeed)
                             .padding(.horizontal, 1)
-                            .onTapGesture {
-                                showVideoFeed = true
-                            }
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showSignOutAlert = true }) {
-                        Text("Sign Out")
-                            .foregroundColor(.red)
+                    HStack {
+                        Button(action: { showEditProfile = true }) {
+                            Text("Edit Profile")
+                                .foregroundColor(.blue)
+                        }
+                        
+                        Button(action: { showSignOutAlert = true }) {
+                            Text("Sign Out")
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
@@ -126,24 +120,13 @@ struct ProfileDetailView: View {
                 NavigationView {
                     ProfileEditView(user: viewModel.user) { updatedUser in
                         Task {
-                            do {
-                                try await viewModel.updateProfile(
-                                    username: updatedUser.username,
-                                    bio: updatedUser.bio,
-                                    preferredCategories: updatedUser.preferredCategories
-                                )
-                                await MainActor.run {
-                                    showEditProfile = false
-                                }
-                            } catch {
-                                print("DEBUG: Failed to update profile: \(error.localizedDescription)")
+                            await MainActor.run {
+                                viewModel.user = updatedUser
+                                showEditProfile = false
                             }
                         }
                     }
                 }
-            }
-            .refreshable {
-                await viewModel.fetchUserPosts()
             }
             .onChange(of: showEditProfile) { _, isPresented in
                 if !isPresented {
@@ -164,6 +147,17 @@ struct ProfileDetailView: View {
             }
             .fullScreenCover(isPresented: $showVideoFeed) {
                 ProfileVideoFeedView(posts: viewModel.userPosts)
+            }
+            .onChange(of: showVideoFeed) { _, isPresented in
+                if !isPresented {
+                    Task {
+                        print("DEBUG: Refreshing posts after video feed dismissal")
+                        await viewModel.fetchUserPosts()
+                    }
+                }
+            }
+            .refreshable {
+                await viewModel.fetchUserPosts()
             }
         }
     }

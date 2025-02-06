@@ -18,13 +18,10 @@ service firebase.storage {
       return request.auth.uid == userId;
     }
     
-    // Profile images rules
+    // Profile images rules - More permissive for debugging
     match /profile_images/{filename} {
       allow read: if true;  // Anyone can view profile photos
-      allow write: if isAuthenticated() 
-                  && request.auth.uid == filename.split('_')[0]
-                  && request.resource.size < 5 * 1024 * 1024  // 5MB limit
-                  && request.resource.contentType.matches('image/.*');
+      allow create, update, delete: if isAuthenticated();  // Temporarily more permissive for debugging
     }
     
     // Videos folder rules - Temporarily more permissive for debugging

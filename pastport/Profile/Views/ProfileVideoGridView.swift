@@ -3,6 +3,8 @@ import AVKit
 
 struct ProfileVideoGridView: View {
     let videos: [Post]
+    @Binding var showVideoFeed: Bool
+    
     let columns = [
         GridItem(.flexible(), spacing: 1),
         GridItem(.flexible(), spacing: 1),
@@ -12,7 +14,7 @@ struct ProfileVideoGridView: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 1) {
             ForEach(videos) { video in
-                VideoThumbnailView(video: video)
+                VideoThumbnailView(video: video, showVideoFeed: $showVideoFeed)
             }
         }
     }
@@ -20,6 +22,7 @@ struct ProfileVideoGridView: View {
 
 struct VideoThumbnailView: View {
     let video: Post
+    @Binding var showVideoFeed: Bool
     @State private var thumbnailImage: UIImage?
     @State private var isLoading = true
     
@@ -32,6 +35,9 @@ struct VideoThumbnailView: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geometry.size.width, height: geometry.size.width)
                         .clipped()
+                        .onTapGesture {
+                            showVideoFeed = true
+                        }
                 } else if isLoading {
                     ProgressView()
                         .frame(width: geometry.size.width, height: geometry.size.width)
@@ -96,5 +102,5 @@ struct VideoThumbnailView: View {
             "videoUrl": "https://example.com/video.mp4",
             "views": 100
         ])
-    ])
+    ], showVideoFeed: .constant(false))
 } 
