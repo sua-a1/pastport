@@ -82,9 +82,7 @@ Pastport is a TikTok-like platform that allows creators to engage in historical,
 
 - If Historical → Must select Canonical, Speculative, or Alternate.
 
-- If Myth/Lore → Optional classification (Canonical or Speculative).
-
-- Add searchable hashtags (#Mongols, #GreekMyth).
+- If Myth/Lore → Canonical, Speculative, or Alternate.
 
 ### 5. Character Profiles
 

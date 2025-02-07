@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct ContentView: View {
-    @StateObject private var authViewModel = AuthenticationViewModel()
+    @EnvironmentObject var authViewModel: AuthenticationViewModel
+    @State private var showError = false
+    @State private var errorMessage: String?
     
     var body: some View {
         Group {
@@ -20,12 +23,23 @@ struct ContentView: View {
         }
         .preferredColorScheme(.light) // Forces light mode
         .onAppear {
+            print("DEBUG: ContentView appeared")
             print("DEBUG: Session: \(String(describing: authViewModel.userSession?.uid))")
             print("DEBUG: Current User: \(String(describing: authViewModel.currentUser?.username))")
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") {
+                showError = false
+            }
+        } message: {
+            if let error = errorMessage {
+                Text(error)
+            }
         }
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AuthenticationViewModel())
 }

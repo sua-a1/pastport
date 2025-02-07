@@ -11,6 +11,36 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
+    // Draft validation functions
+    function isValidDraft() {
+      let incomingData = request.resource.data;
+      return incomingData.size() <= 20
+        && 'id' in incomingData && incomingData.id is string
+        && 'userId' in incomingData && incomingData.userId is string
+        && 'title' in incomingData && incomingData.title is string && incomingData.title.size() <= 100
+        && 'content' in incomingData && incomingData.content is string && incomingData.content.size() <= 10000
+        && 'category' in incomingData && incomingData.category in ['Historical', 'Myth & Lore']
+        && (!('subcategory' in incomingData) || incomingData.subcategory in ['Canonical', 'Speculative', 'Alternate'])
+        && 'status' in incomingData && incomingData.status in ['Draft', 'Ready for AI', 'Generating', 'Published']
+        && 'createdAt' in incomingData && incomingData.createdAt is timestamp
+        && 'updatedAt' in incomingData && incomingData.updatedAt is timestamp
+        && 'imageUrls' in incomingData && incomingData.imageUrls is list && incomingData.imageUrls.size() <= 4
+        && 'videoUrls' in incomingData && incomingData.videoUrls is list && incomingData.videoUrls.size() <= 2
+        && 'referenceTextIds' in incomingData && incomingData.referenceTextIds is list && incomingData.referenceTextIds.size() <= 2;
+    }
+    
+    function isValidReferenceText() {
+      let incomingData = request.resource.data;
+      return incomingData.size() <= 10
+        && 'id' in incomingData && incomingData.id is string
+        && 'title' in incomingData && incomingData.title is string && incomingData.title.size() <= 100
+        && 'content' in incomingData && incomingData.content is string && incomingData.content.size() <= 5000
+        && 'createdAt' in incomingData && incomingData.createdAt is timestamp
+        && 'updatedAt' in incomingData && incomingData.updatedAt is timestamp
+        && (!('source' in incomingData) || incomingData.source is string)
+        && 'draftIds' in incomingData && incomingData.draftIds is list;
+    }
+    
     // Posts collection rules
     match /posts/{postId} {
       allow read: if isAuthenticated();
@@ -22,7 +52,9 @@ service cloud.firestore {
     
     // User-specific rules
     match /users/{userId} {
+      // Allow read for all authenticated users to support user profiles
       allow read: if isAuthenticated();
+      // Allow write only for the user's own document
       allow write: if isOwner(userId);
       
       // User's posts subcollection
@@ -30,6 +62,32 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow create: if isOwner(userId);
         allow update, delete: if isOwner(userId);
+      }
+      
+      // User's drafts subcollection
+      match /drafts/{draftId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() 
+                     && isOwner(userId)
+                     && isValidDraft()
+                     && request.resource.data.userId == userId;
+        allow update: if isAuthenticated() 
+                     && isOwner(userId)
+                     && isValidDraft()
+                     && resource.data.userId == userId;
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // User's reference texts subcollection
+      match /referenceTexts/{textId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() 
+                     && isOwner(userId)
+                     && isValidReferenceText();
+        allow update: if isAuthenticated() 
+                     && isOwner(userId)
+                     && isValidReferenceText();
+        allow delete: if isAuthenticated() && isOwner(userId);
       }
     }
     

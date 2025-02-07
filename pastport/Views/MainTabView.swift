@@ -3,7 +3,6 @@ import SwiftUI
 struct MainTabView: View {
     let authViewModel: AuthenticationViewModel
     @State private var selectedTab = 0
-    @State private var showVideoCreation = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -21,18 +20,13 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            Button(action: { showVideoCreation = true }) {
-                Image(systemName: "plus.circle.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 45, height: 45)
-                    .foregroundStyle(.white, .blue)
-            }
-            .tabItem {
-                Image(systemName: "plus")
-                Text("Create")
-            }
-            .tag(2)
+            CreateView()
+                .environmentObject(authViewModel)
+                .tabItem {
+                    Image(systemName: "plus")
+                    Text("Create")
+                }
+                .tag(2)
             
             Text("Inbox")
                 .tabItem {
@@ -49,9 +43,6 @@ struct MainTabView: View {
                     }
                     .tag(4)
             }
-        }
-        .sheet(isPresented: $showVideoCreation) {
-            VideoRecordingView(showCameraView: $showVideoCreation, selectedTab: $selectedTab)
         }
     }
 }
@@ -70,4 +61,8 @@ struct CreateButtonView: View {
         }
         .frame(height: 50)
     }
+}
+
+#Preview {
+    MainTabView(authViewModel: AuthenticationViewModel())
 } 

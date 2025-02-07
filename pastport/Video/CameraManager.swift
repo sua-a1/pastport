@@ -58,9 +58,13 @@ protocol RecordingDelegate: AnyObject {
             print("DEBUG: Beginning session configuration")
             session.beginConfiguration()
             
-            // Set quality level
-            if session.canSetSessionPreset(.high) {
+            // Set highest quality level
+            if session.canSetSessionPreset(.hd1920x1080) {
+                session.sessionPreset = .hd1920x1080
+                print("DEBUG: Set camera quality to HD (1920x1080)")
+            } else if session.canSetSessionPreset(.high) {
                 session.sessionPreset = .high
+                print("DEBUG: Set camera quality to high")
             }
             
             // Setup video input
@@ -99,8 +103,10 @@ protocol RecordingDelegate: AnyObject {
         }
         
         do {
-            // Configure device for better low light performance
+            // Configure device for better quality
             try device.lockForConfiguration()
+            
+            // Enable low light boost if available
             if device.isLowLightBoostEnabled {
                 device.automaticallyEnablesLowLightBoostWhenAvailable = true
             }
@@ -111,6 +117,17 @@ protocol RecordingDelegate: AnyObject {
             }
             if device.isExposureModeSupported(.continuousAutoExposure) {
                 device.exposureMode = .continuousAutoExposure
+            }
+            
+            // Set highest frame rate available
+            let formats = device.formats
+            if let highestFrameRateFormat = formats.first(where: { format in
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let maxFrameRate = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
+                return dimensions.width >= 1920 && maxFrameRate >= 30
+            }) {
+                device.activeFormat = highestFrameRateFormat
+                print("DEBUG: Set highest quality video format")
             }
             
             device.unlockForConfiguration()
@@ -149,18 +166,28 @@ protocol RecordingDelegate: AnyObject {
         print("DEBUG: Setting up movie output")
         
         movieOutput = AVCaptureMovieFileOutput()
-        if let movieOutput = movieOutput, session.canAddOutput(movieOutput) {
-            session.addOutput(movieOutput)
+        
+        if let movieOutput = movieOutput {
+            // Configure for high quality recording
+            movieOutput.movieFragmentInterval = .invalid // For better quality
             
-            if let connection = movieOutput.connection(with: .video) {
-                if connection.isVideoStabilizationSupported {
-                    connection.preferredVideoStabilizationMode = .auto
+            if session.canAddOutput(movieOutput) {
+                session.addOutput(movieOutput)
+                
+                if let connection = movieOutput.connection(with: .video) {
+                    // Enable highest quality video stabilization
+                    if connection.isVideoStabilizationSupported {
+                        connection.preferredVideoStabilizationMode = .cinematic
+                    }
+                    
+                    // Set video rotation for portrait
+                    connection.videoRotationAngle = 90
+                    
+                    // Set highest quality
+                    connection.videoScaleAndCropFactor = 1.0 // No scaling
+                    
+                    print("DEBUG: Movie output setup successfully with high quality settings")
                 }
-                
-                // Enable video orientation updates
-                connection.videoOrientation = .portrait
-                
-                print("DEBUG: Movie output setup successfully")
             }
         }
     }
@@ -235,8 +262,8 @@ protocol RecordingDelegate: AnyObject {
         
         print("DEBUG: Original video - Duration: \(duration.seconds)s, Size: \(size)")
         
-        // Create compression configuration
-        let preset = AVAssetExportPresetMediumQuality
+        // Create compression configuration with high quality
+        let preset = AVAssetExportPresetHighestQuality // Use highest quality
         guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             print("DEBUG: Failed to create export session")
             throw VideoUploadError.compressionFailed
@@ -247,7 +274,7 @@ protocol RecordingDelegate: AnyObject {
             .appendingPathComponent("compressed_\(UUID().uuidString)")
             .appendingPathExtension("mp4")
         
-        // Configure export session
+        // Configure export session with high quality settings
         session.outputURL = compressedURL
         session.outputFileType = .mp4
         session.shouldOptimizeForNetworkUse = true

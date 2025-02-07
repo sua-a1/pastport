@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct LoadingView: View {
+struct AppLoadingView: View {
     @State private var isAnimating = false
     
     var body: some View {
@@ -53,5 +53,5 @@ struct LoadingView: View {
 }
 
 #Preview {
-    LoadingView()
+    AppLoadingView()
 } 

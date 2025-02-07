@@ -5,15 +5,22 @@ import FirebaseStorage
 @MainActor
 class ProfileViewModel: ObservableObject {
     @Published var user: User
-    @Published var isLoading = false
+    @Published var isLoadingVideos = false
+    @Published var isLoadingDrafts = false
+    @Published var isLoading = false  // For profile updates only
     @Published var errorMessage: String?
     @Published var userPosts: [Post] = []
+    @Published var userDrafts: [Draft] = []
+    
+    private let firestore = Firestore.firestore()
     
     init(user: User) {
         self.user = user
         print("DEBUG: ProfileViewModel initialized for user: \(user.id)")
         Task {
-            await fetchUserPosts()
+            async let posts = fetchUserPosts()
+            async let drafts = fetchUserDrafts()
+            _ = await [posts, drafts]
         }
     }
     
@@ -115,8 +122,9 @@ class ProfileViewModel: ObservableObject {
     
     @MainActor
     func fetchUserPosts() async {
-        isLoading = true
-        defer { isLoading = false }
+        guard !isLoadingVideos else { return }
+        isLoadingVideos = true
+        defer { isLoadingVideos = false }
         
         do {
             let snapshot = try await Firestore.firestore()
@@ -134,6 +142,38 @@ class ProfileViewModel: ObservableObject {
         } catch {
             print("DEBUG: Failed to fetch user posts: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
+        }
+    }
+    
+    @MainActor
+    func fetchUserDrafts() async {
+        guard !isLoadingDrafts else { return }
+        isLoadingDrafts = true
+        
+        do {
+            print("DEBUG: Fetching drafts for user: \(user.id)")
+            let snapshot = try await firestore
+                .collection("users")
+                .document(user.id)
+                .collection("drafts")
+                .order(by: "updatedAt", descending: true)
+                .getDocuments()
+            
+            let drafts = snapshot.documents.compactMap { document -> Draft? in
+                guard let draft = Draft.fromFirestore(document.data(), id: document.documentID) else {
+                    print("DEBUG: Failed to parse draft: \(document.documentID)")
+                    return nil
+                }
+                return draft
+            }
+            
+            print("DEBUG: Fetched \(drafts.count) drafts")
+            self.userDrafts = drafts
+            self.isLoadingDrafts = false
+        } catch {
+            print("DEBUG: Error fetching drafts: \(error)")
+            errorMessage = "Failed to load drafts"
+            isLoadingDrafts = false
         }
     }
 } 

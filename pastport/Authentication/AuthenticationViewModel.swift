@@ -59,9 +59,7 @@ class AuthenticationViewModel: ObservableObject {
             let user = User(
                 id: result.user.uid,
                 username: username,
-                email: email,
-                dateJoined: Date(),
-                lastActive: Date()
+                email: email
             )
             
             // Convert to dictionary and store in Firestore
@@ -120,9 +118,7 @@ class AuthenticationViewModel: ObservableObject {
             let user = User(
                 id: currentAuthUser.uid,
                 username: currentAuthUser.email?.components(separatedBy: "@").first ?? "user",
-                email: currentAuthUser.email ?? "",
-                dateJoined: Date(),
-                lastActive: Date()
+                email: currentAuthUser.email ?? ""
             )
             
             // Save to Firestore

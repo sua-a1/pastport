@@ -1,7 +1,10 @@
 import Foundation
+import SwiftUI
+import AVFoundation
 import FirebaseStorage
 import FirebaseFirestore
 import FirebaseAuth
+import PhotosUI
 
 enum VideoUploadError: LocalizedError {
     case noUser
@@ -204,5 +207,81 @@ final class VideoUploader {
             .getDocuments()
         
         return snapshot.documents.map { $0.data() }
+    }
+    
+    static func uploadVideo(from item: PhotosPickerItem, to path: String) async throws -> String {
+        print("DEBUG: Starting video upload process")
+        
+        // Load video data
+        guard let movie = try? await item.loadTransferable(type: MovieTransferable.self) else {
+            throw NSError(domain: "VideoUploader", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to load video data"])
+        }
+        
+        // Create AVAsset for compression
+        let asset = AVAsset(url: movie.url)
+        
+        // Create temp URL for compressed video
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mp4")
+        
+        // Compress video
+        print("DEBUG: Compressing video")
+        try await compressVideo(asset: asset, outputURL: tempURL)
+        
+        // Upload to Firebase
+        print("DEBUG: Uploading compressed video")
+        let storage = Storage.storage().reference()
+        let videoRef = storage.child(path)
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "video/mp4"
+        
+        _ = try await videoRef.putFileAsync(from: tempURL, metadata: metadata)
+        let downloadURL = try await videoRef.downloadURL()
+        
+        // Clean up temp file
+        try? FileManager.default.removeItem(at: tempURL)
+        
+        print("DEBUG: Video upload complete")
+        return downloadURL.absoluteString
+    }
+    
+    private static func compressVideo(asset: AVAsset, outputURL: URL) async throws {
+        let composition = AVMutableComposition()
+        guard let compositionTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            throw NSError(domain: "VideoUploader", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create composition track"])
+        }
+        
+        guard let assetTrack = try? await asset.loadTracks(withMediaType: .video).first else {
+            throw NSError(domain: "VideoUploader", code: -3, userInfo: [NSLocalizedDescriptionKey: "Failed to load video track"])
+        }
+        
+        try compositionTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: try await asset.load(.duration)),
+            of: assetTrack,
+            at: .zero
+        )
+        
+        // Configure compression settings
+        guard let session = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetMediumQuality
+        ) else {
+            throw NSError(domain: "VideoUploader", code: -4, userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
+        }
+        
+        session.outputURL = outputURL
+        session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
+        
+        await session.export()
+        
+        if let error = session.error {
+            throw error
+        }
     }
 } 

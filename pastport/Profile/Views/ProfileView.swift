@@ -22,6 +22,47 @@ struct ProfileView: View {
                     }
                 }
         }
+        .task {
+            await viewModel.fetchUserDrafts()
+        }
+        .onAppear {
+            // Add observers for draft updates
+            NotificationCenter.default.addObserver(
+                forName: .draftDeleted,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task {
+                    await viewModel.fetchUserDrafts()
+                }
+            }
+            
+            NotificationCenter.default.addObserver(
+                forName: .draftUpdated,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task {
+                    await viewModel.fetchUserDrafts()
+                }
+            }
+            
+            NotificationCenter.default.addObserver(
+                forName: .draftCreated,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task {
+                    await viewModel.fetchUserDrafts()
+                }
+            }
+        }
+        .onDisappear {
+            // Remove observers
+            NotificationCenter.default.removeObserver(self, name: .draftDeleted, object: nil)
+            NotificationCenter.default.removeObserver(self, name: .draftUpdated, object: nil)
+            NotificationCenter.default.removeObserver(self, name: .draftCreated, object: nil)
+        }
     }
 }
 

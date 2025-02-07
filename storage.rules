@@ -7,18 +7,41 @@ service firebase.storage {
       return request.auth != null;
     }
     
-    // Function to check if the file is a valid video
-    function isValidVideo() {
-      return request.resource.contentType.matches('video/.*')
-        && request.resource.size < 100 * 1024 * 1024; // 100MB max
-    }
-    
     // Function to check if user owns the file
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
     
-    // Profile images rules - More permissive for debugging
+    // Function to check if file is a valid image
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;  // 5MB max
+    }
+    
+    // Function to check if file is a valid video
+    function isValidVideo() {
+      return request.resource.contentType.matches('video/.*')
+        && request.resource.size < 100 * 1024 * 1024;  // 100MB max
+    }
+    
+    // Draft attachments rules
+    match /drafts/{userId}/{draftId}/images/{imageId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create, update: if isAuthenticated() 
+                   && isOwner(userId)
+                   && isValidImage();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    match /drafts/{userId}/{draftId}/videos/{videoId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create, update: if isAuthenticated() 
+                   && isOwner(userId)
+                   && isValidVideo();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Profile images rules
     match /profile_images/{filename} {
       allow read: if true;  // Anyone can view profile photos
       allow create, update, delete: if isAuthenticated();  // Temporarily more permissive for debugging
