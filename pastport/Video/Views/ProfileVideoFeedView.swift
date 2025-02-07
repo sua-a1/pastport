@@ -9,7 +9,7 @@ struct ProfileVideoFeedView: View {
     @State private var isScrolling = false
     @State private var pendingIndex: Int?
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var playerManager = VideoPlayerManager.shared
+    private let playerManager = VideoPlayerManager.shared
     
     private func playVideo(at index: Int) async {
         guard let post = posts[safe: index] else { return }
@@ -116,6 +116,23 @@ struct ProfileVideoFeedView: View {
         }
         .ignoresSafeArea(edges: .all)
         .background(Color.black)
+    }
+}
+
+struct VideoPostView: View {
+    let post: Post
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !post.caption.isEmpty {
+                Text(post.caption)
+                    .font(.subheadline)
+                    .padding(.horizontal)
+            }
+            
+            CategoryTagView(category: post.category, subcategory: post.subcategory)
+                .padding(.horizontal)
+        }
     }
 }
 

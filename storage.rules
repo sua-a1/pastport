@@ -44,21 +44,18 @@ service firebase.storage {
     // Profile images rules
     match /profile_images/{filename} {
       allow read: if true;  // Anyone can view profile photos
-      allow create, update, delete: if isAuthenticated();  // Temporarily more permissive for debugging
+      allow create, update, delete: if isAuthenticated() 
+                                   && filename.matches(request.auth.uid + '_.*');
     }
     
-    // Videos folder rules - Temporarily more permissive for debugging
-    match /videos/{videoId} {
-      // Allow read for authenticated users
+    // Videos folder rules
+    match /videos/{filename} {
       allow read: if isAuthenticated();
-      
-      // Temporarily allow all authenticated users to upload
-      allow write, create, update: if isAuthenticated()
-                                  && isValidVideo();
-      
-      // Allow delete only if user owns the video
-      allow delete: if isAuthenticated()
-                   && videoId.matches(request.auth.uid + '_.*');
+      allow create: if isAuthenticated() 
+                   && filename.matches(request.auth.uid + '_.*')
+                   && isValidVideo();
+      allow delete: if isAuthenticated() 
+                   && filename.matches(request.auth.uid + '_.*');
     }
     
     // Default deny

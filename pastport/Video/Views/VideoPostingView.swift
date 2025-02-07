@@ -7,6 +7,8 @@ import FirebaseAuth
 struct VideoPostingView: View {
     let videoURL: URL
     @State private var caption = ""
+    @State private var selectedCategory: PostCategory?
+    @State private var selectedSubcategory: PostSubcategory?
     @State private var isUploading = false
     @State private var showError = false
     @State private var errorMessage = ""
@@ -42,11 +44,19 @@ struct VideoPostingView: View {
                                 player.pause()
                             }
                         
-                        // Caption Input
-                        TextField("Describe your video...", text: $caption, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(3...6)
-                            .padding(.horizontal)
+                        VStack(spacing: 24) {
+                            // Caption Input
+                            TextField("Describe your video...", text: $caption, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(3...6)
+                            
+                            // Category Selection
+                            CategorySelectionView(
+                                selectedCategory: $selectedCategory,
+                                selectedSubcategory: $selectedSubcategory
+                            )
+                        }
+                        .padding(.horizontal)
                         
                         if isUploading {
                             VStack {
@@ -93,7 +103,7 @@ struct VideoPostingView: View {
                     Button("Post") {
                         uploadVideo()
                     }
-                    .disabled(isUploading || caption.isEmpty)
+                    .disabled(isUploading || caption.isEmpty || selectedCategory == nil || selectedSubcategory == nil)
                 }
             }
             .alert("Error", isPresented: $showError) {
@@ -132,12 +142,21 @@ struct VideoPostingView: View {
             print("DEBUG: Video file attributes: \(attributes)")
         }
         
+        guard let category = selectedCategory, let subcategory = selectedSubcategory else {
+            print("DEBUG: Category or subcategory not selected")
+            return
+        }
+        
         isUploading = true
         
         Task {
             do {
                 print("DEBUG: Attempting to upload video")
-                let url = try await videoUploader.uploadVideo(url: videoURL, caption: caption)
+                let url = try await videoUploader.uploadVideo(
+                    url: videoURL,
+                    caption: caption,
+                    categorization: PostCategorization(category: category, subcategory: subcategory)
+                )
                 print("DEBUG: Video upload completed successfully with URL: \(url)")
                 await MainActor.run {
                     isUploading = false

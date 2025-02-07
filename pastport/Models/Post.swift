@@ -13,6 +13,7 @@ struct Post: Identifiable, Codable {
     var shares: Int
     var comments: Int
     let category: String
+    let subcategory: String
     let type: String
     let status: String
     let metadata: [String: Any]
@@ -28,7 +29,8 @@ struct Post: Identifiable, Codable {
         self.views = data["views"] as? Int ?? 0
         self.shares = data["shares"] as? Int ?? 0
         self.comments = data["comments"] as? Int ?? 0
-        self.category = data["category"] as? String ?? "history"
+        self.category = data["category"] as? String ?? "Historical"
+        self.subcategory = data["subcategory"] as? String ?? "Canonical"
         self.type = data["type"] as? String ?? "video"
         self.status = data["status"] as? String ?? "active"
         self.metadata = data["metadata"] as? [String: Any] ?? [:]
@@ -47,6 +49,7 @@ struct Post: Identifiable, Codable {
         case shares
         case comments
         case category
+        case subcategory
         case type
         case status
         case metadata
@@ -65,6 +68,7 @@ struct Post: Identifiable, Codable {
         shares = try container.decode(Int.self, forKey: .shares)
         comments = try container.decode(Int.self, forKey: .comments)
         category = try container.decode(String.self, forKey: .category)
+        subcategory = try container.decode(String.self, forKey: .subcategory)
         type = try container.decode(String.self, forKey: .type)
         status = try container.decode(String.self, forKey: .status)
         
@@ -98,6 +102,7 @@ struct Post: Identifiable, Codable {
         try container.encode(shares, forKey: .shares)
         try container.encode(comments, forKey: .comments)
         try container.encode(category, forKey: .category)
+        try container.encode(subcategory, forKey: .subcategory)
         try container.encode(type, forKey: .type)
         try container.encode(status, forKey: .status)
         

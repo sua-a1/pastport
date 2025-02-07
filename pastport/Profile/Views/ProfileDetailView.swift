@@ -185,7 +185,7 @@ private struct VideoContentView: View {
     let videos: [Post]
     @Binding var showVideoFeed: Bool
     @Binding var selectedVideoIndex: Int
-    @ObservedObject private var playerManager = VideoPlayerManager.shared
+    private let playerManager = VideoPlayerManager.shared
     
     var body: some View {
         if isLoading {

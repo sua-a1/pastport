@@ -46,8 +46,10 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() 
                    && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() 
-                          && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() 
+                   && request.auth.uid == resource.data.userId;
+      allow update: if isAuthenticated() 
+                   && request.auth.uid == resource.data.userId;
     }
     
     // User-specific rules
@@ -61,7 +63,9 @@ service cloud.firestore {
       match /posts/{postId} {
         allow read: if isAuthenticated();
         allow create: if isOwner(userId);
-        allow update, delete: if isOwner(userId);
+        allow delete: if isAuthenticated() 
+                     && isOwner(userId)
+                     && request.auth.uid == resource.data.userId;
       }
       
       // User's drafts subcollection
@@ -89,6 +93,15 @@ service cloud.firestore {
                      && isValidReferenceText();
         allow delete: if isAuthenticated() && isOwner(userId);
       }
+    }
+    
+    // User's posts subcollection
+    match /users/{userId}/posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow delete: if isAuthenticated() 
+                   && isOwner(userId)
+                   && request.auth.uid == resource.data.userId;
     }
     
     // Default deny

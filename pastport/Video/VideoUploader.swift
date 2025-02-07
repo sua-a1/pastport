@@ -35,7 +35,7 @@ final class VideoUploader {
     private let db = Firestore.firestore()
     private(set) var uploadProgress: Double = 0
     
-    func uploadVideo(url: URL, caption: String) async throws -> String {
+    func uploadVideo(url: URL, caption: String, categorization: PostCategorization) async throws -> String {
         guard let uid = Auth.auth().currentUser?.uid else {
             print("DEBUG: Upload failed - No authenticated user")
             throw VideoUploadError.noUser
@@ -65,81 +65,80 @@ final class VideoUploader {
             "userId": uid,
             "caption": caption,
             "timestamp": String(timestamp),
-            "originalFilename": url.lastPathComponent
+            "originalFilename": url.lastPathComponent,
+            "category": categorization.category.rawValue,
+            "subcategory": categorization.subcategory.rawValue
         ]
         
         // Upload video
         do {
-            print("DEBUG: Creating upload task with metadata")
+            print("DEBUG: Starting upload")
+            let data = try Data(contentsOf: url, options: .alwaysMapped)
             
             return try await withCheckedThrowingContinuation { continuation in
-                print("DEBUG: Starting upload continuation")
+                var lastProgressUpdate = Date()
                 
-                // Create upload task
-                let task = videoRef.putFile(from: url, metadata: metadata)
-                var handles: Set<String> = []
+                // Create upload task with built-in chunked upload
+                let task = videoRef.putData(data, metadata: metadata)
                 
                 // Monitor progress
                 let progressHandle = task.observe(.progress) { [weak self] snapshot in
                     guard let self = self,
-                          let progress = snapshot.progress else {
-                        print("DEBUG: Failed to get upload progress")
-                        return
-                    }
+                          let progress = snapshot.progress else { return }
                     
                     let percentComplete = Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
-                    print("DEBUG: Upload progress: \(Int(percentComplete * 100))%")
-                    self.uploadProgress = percentComplete
+                    
+                    // Update progress at most once per second
+                    let now = Date()
+                    if now.timeIntervalSince(lastProgressUpdate) >= 1.0 {
+                        lastProgressUpdate = now
+                        self.uploadProgress = percentComplete
+                        print("DEBUG: Upload progress: \(Int(percentComplete * 100))%")
+                        
+                        // Calculate speed
+                        let bytesPerSecond = Double(progress.completedUnitCount) / now.timeIntervalSince(lastProgressUpdate)
+                        print("DEBUG: Upload speed: \(String(format: "%.2f", bytesPerSecond / 1024 / 1024))MB/s")
+                    }
                 }
                 
                 // Handle success
                 let successHandle = task.observe(.success) { [weak self] _ in
-                    print("DEBUG: Upload completed successfully, removing observers")
-                    
-                    // Remove observers
+                    print("DEBUG: Upload completed successfully")
                     task.removeAllObservers()
                     
                     // Get download URL and create post document
                     Task {
                         do {
-                            print("DEBUG: Attempting to get download URL")
                             let downloadURL = try await videoRef.downloadURL()
                             print("DEBUG: Got download URL: \(downloadURL.absoluteString)")
                             
-                            // Create post document with metadata
+                            // Create post document
                             let post = [
                                 "userId": uid,
                                 "caption": caption,
                                 "videoUrl": downloadURL.absoluteString,
                                 "videoFilename": filename,
-                                "timestamp": FieldValue.serverTimestamp(),
+                                "timestamp": Timestamp(date: Date()),
                                 "likes": 0,
                                 "views": 0,
                                 "shares": 0,
                                 "comments": 0,
-                                "category": "history",
-                                "type": "video",
-                                "status": "active",
-                                "metadata": [
-                                    "originalFilename": url.lastPathComponent,
-                                    "uploadTimestamp": timestamp,
-                                    "fileSize": fileSize
-                                ] as [String: Any]
+                                "category": categorization.category.rawValue,
+                                "subcategory": categorization.subcategory.rawValue
                             ] as [String : Any]
                             
-                            print("DEBUG: Creating Firestore post document")
-                            // Add to posts collection
-                            try await self?.db.collection("posts").addDocument(data: post)
-                            print("DEBUG: Post document created in Firestore")
+                            // Add to main posts collection
+                            let docRef = try await self?.db.collection("posts").addDocument(data: post)
                             
-                            // Add to user's posts collection
+                            // Add to user's posts subcollection
                             try await self?.db.collection("users").document(uid)
-                                .collection("posts").addDocument(data: post)
-                            print("DEBUG: Added to user's posts collection")
+                                .collection("posts").document(docRef?.documentID ?? "")
+                                .setData(post)
                             
-                            continuation.resume(returning: downloadURL.absoluteString)
+                            print("DEBUG: Post documents created successfully")
+                            continuation.resume(returning: docRef?.documentID ?? "")
                         } catch {
-                            print("DEBUG: Post-upload processing failed: \(error.localizedDescription)")
+                            print("DEBUG: Failed to create post documents: \(error)")
                             continuation.resume(throwing: VideoUploadError.uploadFailed(error))
                         }
                     }
@@ -147,40 +146,13 @@ final class VideoUploader {
                 
                 // Handle failure
                 let failureHandle = task.observe(.failure) { snapshot in
-                    print("DEBUG: Upload failed with error: \(String(describing: snapshot.error))")
-                    if let error = snapshot.error as NSError? {
-                        print("DEBUG: Error details - Domain: \(error.domain), Code: \(error.code)")
-                        print("DEBUG: Error user info: \(error.userInfo)")
-                    }
-                    
-                    // Remove observers
+                    print("DEBUG: Upload failed: \(snapshot.error?.localizedDescription ?? "Unknown error")")
                     task.removeAllObservers()
-                    
-                    if let error = snapshot.error {
-                        continuation.resume(throwing: VideoUploadError.uploadFailed(error))
-                    } else {
-                        continuation.resume(throwing: VideoUploadError.uploadFailed(NSError(domain: "VideoUploader", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown upload error"])))
-                    }
+                    continuation.resume(throwing: VideoUploadError.uploadFailed(snapshot.error ?? NSError()))
                 }
-                
-                print("DEBUG: Upload observers set up with metadata:")
-                print("DEBUG: Content type: \(metadata.contentType ?? "nil")")
-                if let customMetadata = metadata.customMetadata {
-                    print("DEBUG: Custom metadata: \(customMetadata)")
-                }
-                
-                // Add state observer
-                task.observe(.resume) { snapshot in
-                    print("DEBUG: Upload task resumed")
-                }
-                task.observe(.pause) { snapshot in
-                    print("DEBUG: Upload task paused")
-                }
-                
-                print("DEBUG: Upload observers set up")
             }
         } catch {
-            print("DEBUG: Upload failed: \(error.localizedDescription)")
+            print("DEBUG: Upload failed with error: \(error)")
             throw VideoUploadError.uploadFailed(error)
         }
     }
