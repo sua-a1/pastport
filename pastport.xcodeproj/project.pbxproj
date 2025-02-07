@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9E8923F32D56BD7500381F79 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 9E8923F22D56BD7500381F79 /* Lottie */; };
 		9ED772F62D52759E00D2625E /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 9ED772F52D52759E00D2625E /* FirebaseAuth */; };
 		9ED772F82D52759E00D2625E /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 9ED772F72D52759E00D2625E /* FirebaseFirestore */; };
 		9ED772FA2D52759E00D2625E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 9ED772F92D52759E00D2625E /* FirebaseStorage */; };
@@ -88,6 +89,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9E8923F32D56BD7500381F79 /* Lottie in Frameworks */,
 				9ED772F62D52759E00D2625E /* FirebaseAuth in Frameworks */,
 				9ED772F82D52759E00D2625E /* FirebaseFirestore in Frameworks */,
 				9ED772FC2D5275DE00D2625E /* FirebaseAnalytics in Frameworks */,
@@ -156,6 +158,7 @@
 				9ED772F72D52759E00D2625E /* FirebaseFirestore */,
 				9ED772F92D52759E00D2625E /* FirebaseStorage */,
 				9ED772FB2D5275DE00D2625E /* FirebaseAnalytics */,
+				9E8923F22D56BD7500381F79 /* Lottie */,
 			);
 			productName = pastport;
 			productReference = 9ED772BF2D51967100D2625E /* pastport.app */;
@@ -241,6 +244,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				9ED772F42D52759E00D2625E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				9E8923F12D56BD7500381F79 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9ED772C02D51967100D2625E /* Products */;
@@ -605,6 +609,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		9E8923F12D56BD7500381F79 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.1;
+			};
+		};
 		9ED772F42D52759E00D2625E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -616,6 +628,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		9E8923F22D56BD7500381F79 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E8923F12D56BD7500381F79 /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
+		};
 		9ED772F52D52759E00D2625E /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9ED772F42D52759E00D2625E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

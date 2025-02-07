@@ -19,87 +19,93 @@ struct ProfileDetailView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Profile Header
-                        ProfileHeaderView(
-                            user: viewModel.user,
-                            showEditProfile: $showEditProfile,
-                            userPosts: viewModel.userPosts
-                        )
-                        
-                        CategoriesSection(categories: viewModel.user.preferredCategories)
-                        
-                        // Custom Tab Bar
-                        HStack(spacing: 0) {
-                            ForEach(ContentTab.allCases) { tab in
-                                TabButton(
-                                    tab: tab,
-                                    selectedTab: selectedTab,
-                                    namespace: animation
-                                ) {
-                                    withAnimation {
-                                        selectedTab = tab
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Tab Content
-                        TabView(selection: $selectedTab) {
-                            // Videos Tab
-                            ScrollView {
-                                VideoContentView(
-                                    isLoading: viewModel.isLoadingVideos,
-                                    videos: viewModel.userPosts,
-                                    showVideoFeed: $showVideoFeed,
-                                    selectedVideoIndex: $selectedVideoIndex
-                                )
-                            }
-                            .tag(ContentTab.videos)
-                            
-                            // Drafts Tab
-                            DraftContentView(
-                                isLoading: viewModel.isLoadingDrafts,
-                                drafts: viewModel.userDrafts,
-                                onRefresh: {
-                                    Task {
-                                        await viewModel.fetchUserDrafts()
-                                    }
-                                }
+            ZStack {
+                // Background color
+                Color.pastportBackground
+                    .ignoresSafeArea()
+                
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // Profile Header
+                            ProfileHeaderView(
+                                user: viewModel.user,
+                                showEditProfile: $showEditProfile,
+                                userPosts: viewModel.userPosts
                             )
-                            .padding(.horizontal)
-                            .tag(ContentTab.drafts)
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .frame(minHeight: UIScreen.main.bounds.width * 1.5) // Increase minimum height to show all content
-                    }
-                    .padding(.bottom)
-                }
-                .refreshable {
-                    Task {
-                        switch selectedTab {
-                        case .videos:
-                            await viewModel.fetchUserPosts()
-                        case .drafts:
-                            await viewModel.fetchUserDrafts()
-                        }
-                    }
-                }
-                .onChange(of: selectedTab) { _, newTab in
-                    VideoPlayerManager.shared.pause()
-                    
-                    Task { @MainActor in
-                        switch newTab {
-                        case .videos:
-                            if viewModel.userPosts.isEmpty {
-                                await viewModel.fetchUserPosts()
+                            
+                            CategoriesSection(categories: viewModel.user.preferredCategories)
+                            
+                            // Custom Tab Bar
+                            HStack(spacing: 0) {
+                                ForEach(ContentTab.allCases) { tab in
+                                    TabButton(
+                                        tab: tab,
+                                        selectedTab: selectedTab,
+                                        namespace: animation
+                                    ) {
+                                        withAnimation {
+                                            selectedTab = tab
+                                        }
+                                    }
+                                }
                             }
-                        case .drafts:
-                            if viewModel.userDrafts.isEmpty {
+                            .padding(.horizontal)
+                            
+                            // Tab Content
+                            TabView(selection: $selectedTab) {
+                                // Videos Tab
+                                ScrollView {
+                                    VideoContentView(
+                                        isLoading: viewModel.isLoadingVideos,
+                                        videos: viewModel.userPosts,
+                                        showVideoFeed: $showVideoFeed,
+                                        selectedVideoIndex: $selectedVideoIndex
+                                    )
+                                }
+                                .tag(ContentTab.videos)
+                                
+                                // Drafts Tab
+                                DraftContentView(
+                                    isLoading: viewModel.isLoadingDrafts,
+                                    drafts: viewModel.userDrafts,
+                                    onRefresh: {
+                                        Task {
+                                            await viewModel.fetchUserDrafts()
+                                        }
+                                    }
+                                )
+                                .padding(.horizontal)
+                                .tag(ContentTab.drafts)
+                            }
+                            .tabViewStyle(.page(indexDisplayMode: .never))
+                            .frame(minHeight: UIScreen.main.bounds.width * 1.5)
+                        }
+                        .padding(.bottom)
+                    }
+                    .refreshable {
+                        Task {
+                            switch selectedTab {
+                            case .videos:
+                                await viewModel.fetchUserPosts()
+                            case .drafts:
                                 await viewModel.fetchUserDrafts()
+                            }
+                        }
+                    }
+                    .onChange(of: selectedTab) { _, newTab in
+                        VideoPlayerManager.shared.pause()
+                        
+                        Task { @MainActor in
+                            switch newTab {
+                            case .videos:
+                                if viewModel.userPosts.isEmpty {
+                                    await viewModel.fetchUserPosts()
+                                }
+                            case .drafts:
+                                if viewModel.userDrafts.isEmpty {
+                                    await viewModel.fetchUserDrafts()
+                                }
                             }
                         }
                     }
@@ -146,7 +152,6 @@ struct ProfileDetailView: View {
             }
             .onChange(of: showVideoFeed) { _, isPresented in
                 if !isPresented {
-                    // Ensure cleanup when dismissing video feed
                     VideoPlayerManager.shared.pause()
                     Task {
                         print("DEBUG: Refreshing posts after video feed dismissal")

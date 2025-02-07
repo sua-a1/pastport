@@ -1,54 +1,66 @@
 import SwiftUI
+import Lottie
 
 struct AppLoadingView: View {
-    @State private var isAnimating = false
-    
     var body: some View {
         ZStack {
             // Background color
-            Color.white
+            Color.pastportBackground
                 .ignoresSafeArea()
             
-            VStack(spacing: 20) {
-                // App Icon
-                if let appIconImage = UIImage(named: "AppIcon") {
-                    Image(uiImage: appIconImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 30))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 30)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
-                        .scaleEffect(isAnimating ? 1.1 : 1.0)
-                } else {
-                    // Fallback app icon using SF Symbol
-                    Image(systemName: "clock.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-                        .foregroundColor(.gray)
-                        .scaleEffect(isAnimating ? 1.1 : 1.0)
-                }
-                
-                // Loading indicator
-                ProgressView()
-                    .scaleEffect(1.5)
-                    .tint(.gray)
-                
-                // App name
-                Text("Pastport")
-                    .font(.title)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.gray)
-                    .opacity(isAnimating ? 1.0 : 0.7)
-            }
-            .animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: isAnimating)
+            // Logo
+            Image("pastport logo with name")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 200)
+            
+            // Loading animation
+            LottieView(name: "Loading")
+                .frame(width: 100, height: 100)
+                .offset(y: 120)
         }
-        .onAppear {
-            isAnimating = true
+    }
+}
+
+struct InlineLoadingView: View {
+    var message: String = "Loading..."
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            LottieView(name: "Loading")
+                .frame(width: 50, height: 50)
+            Text(message)
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
+    }
+}
+
+struct LottieView: UIViewRepresentable {
+    var name: String
+    var loopMode: LottieLoopMode = .loop
+    
+    func makeUIView(context: Context) -> some UIView {
+        let view = UIView()
+        let animationView = LottieAnimationView()
+        let animation = LottieAnimation.named(name)
+        animationView.animation = animation
+        animationView.contentMode = .scaleAspectFit
+        animationView.loopMode = loopMode
+        animationView.play()
+        
+        animationView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(animationView)
+        
+        NSLayoutConstraint.activate([
+            animationView.heightAnchor.constraint(equalTo: view.heightAnchor),
+            animationView.widthAnchor.constraint(equalTo: view.widthAnchor)
+        ])
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIViewType, context: Context) {
     }
 }
 

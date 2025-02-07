@@ -3,11 +3,11 @@
 ## Purpose and Scope
 Pastport is a TikTok-like platform that allows creators to engage in historical, mythological, and speculative storytelling. The app enables users to write, categorize, and share short-form historical and mythological narratives, enriched with multimedia and persistent character profiles. The platform will also support AI-generated storytelling videos in Week 2.
 
- **Scope:**
+**Scope:**
 
     - Week 1: Build the vertical creator flow – focusing on user-uploaded video functionality, text-based draft system, categorization, character profiles, and engagement features.
 
-    - Week 2: AI-powered enhancements – Implement AI-generated storytelling videos, character consistency in AI generation, and speculative ‘What If’ scenarios.
+    - Week 2: AI-powered enhancements – Implement AI-generated storytelling videos, character consistency in AI generation, and speculative 'What If' scenarios.
 
 **Target Platform:**
 - iOS (iPhone)
@@ -19,120 +19,118 @@ Pastport is a TikTok-like platform that allows creators to engage in historical,
  - **Database:** Firebase Firestore for data storage
  - **Storage:** Firebase Storage for media storage
  - **Cloud services:** Cloudinary for video processing
- - **AI services:** to be determined
+ - **AI services:** Luma AI for character generation
 
-## Core Features
-
-1. User Authentication & Profiles – Secure sign-up/login using Firebase Auth.
-
-2. Video Creation, Upload & Processing – Users upload videos, optimized via Cloudinary.
-
-3. Text-Based Drafting – Users create unpublished text drafts with multimedia attachments. (Fully implementedd in Week 2)
-
-4. Post Categorization & Tagging – Historical vs. Myth/Lore with Canonical/Speculative/Alternate classifications.
-
-5. Character Profiles – Users create characters that persist across stories. (Fully implemented in Week 2)
-
-6. Engagement Features – Likes, comments, and shares.
-
-7. AI-Powered Video Generation (Week 2) – Convert text drafts into AI-generated videos with consistent AI characters.
-
-## Feature Requirements & User Stories
+## Implemented Features & User Stories
 
 ### 1. User Authentication & Profiles
-
 **User Story:** "As a user, I want to sign up and manage my profile so I can create and interact with content."
 
-**Requirements:**
+**Implemented:**
+- Email-based authentication using Firebase Auth
+- Profile creation with username, picture, and bio
+- Profile editing functionality
+- Profile video grid display
+- Profile video playback integration
 
-- Google Sign-In & Email-based Authentication.
-- Profile creation (username, picture, bio).
+### 2. Video Creation & Upload
+**User Story:** "As a creator, I want to record and upload videos to share my historical stories."
 
-### 2. Video Upload & Processing
+**Implemented:**
+- In-app video recording with device camera
+- Video upload to Firebase Storage
+- Video compression and optimization
+- Video metadata storage in Firestore
+- Video playback with caching
 
-**User Story:** "As a creator, I want to upload videos and have them optimized for playback."
+### 3. Character Creation
+**User Story:** "As a creator, I want to generate AI characters for my stories using reference images and descriptions, and refine them until they're perfect."
 
-**Requirements:**
+**Implemented:**
+- Character creation form with name and description
+- Reference image upload (up to 4 images) with individual prompts and weights
+- AI-powered character generation using Luma AI
+- Character style customization with visual prompts
+- Advanced refinement flow:
+  - Selection of best generated variations
+  - Generation of new poses and expressions
+  - Refinement based on selected variations
+  - Character consistency preservation
+- Character version history and storage
+- Character metadata management in Firestore
+- Efficient image processing and caching
 
-- Upload videos to Firebase Storage.
+### 4. Draft Management
+**User Story:** "As a creator, I want to save and manage drafts of my stories before publishing."
 
-- Cloudinary processes video for compression & format conversion.
+**Implemented:**
+- Text-based draft creation
+- Multimedia attachment support
+- Draft status tracking
+- Draft list view in profile
+- Local draft storage with SwiftData
 
-- Store metadata (duration, resolution, timestamp) in Firestore.
+### 5. Creator Video Management
+**User Story:** "As a creator, I want to manage my video content effectively with comprehensive playback, sharing, and organization tools."
 
-### 3. Text-Based Drafting
+**Implemented:**
+- Profile video grid display with thumbnails
+- Full-screen video feed in profile:
+  - Vertical scrolling navigation
+  - Auto-play/pause on scroll
+  - Smooth transitions between videos
+- Video management features:
+  - Secure video deletion with confirmation
+  - Cleanup of associated storage and database records
+  - Video sharing functionality
+  - Video metadata display
+- Performance optimizations:
+  - Efficient video loading and caching
+  - Thumbnail generation and caching
+  - Memory management for smooth playback
+- Video organization tools:
+  - Grid/List view toggle
+  - Sort by date/popularity
+  - Category filtering
 
-**User Story:** "As a creator, I want to write and save drafts with resource attachments for AI-based generation later."
+### 6. Content Organization
+**User Story:** "As a creator, I want to organize my content by historical periods and categories."
 
-**Requirements:**
+**Implemented:**
+- Historical vs Myth/Lore classification
+- Canonical/Speculative/Alternate categories
+- Content tagging system
+- Category-based content discovery
+- Organized profile content display
 
-- Save text drafts in Firestore (not published in Week 1).
+## Technical Implementation Details
 
-- Attach multimedia (images, videos, reference texts).
+### Firebase Configuration
 
-- Sync drafts to local SwiftData for offline editing.
+#### Storage Rules
+```javascript
+// Videos folder rules
+match /videos/{videoId} {
+    allow read: if isAuthenticated();
+    allow write, create, update: if isAuthenticated() && isValidVideo();
+    allow delete: if isAuthenticated() && videoId.matches(request.auth.uid + '_.*');
+}
+```
 
-### 4. Post Categorization & Tagging
+#### Firestore Rules
+```javascript
+// Posts collection rules
+match /posts/{postId} {
+    allow read: if isAuthenticated();
+    allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+}
+```
 
-**User Story:** "As a creator, I want to categorize my content so users can discover stories by theme."
-
-**Requirements:**
-
-- Users select Historical/Myth/Lore.
-
-- If Historical → Must select Canonical, Speculative, or Alternate.
-
-- If Myth/Lore → Canonical, Speculative, or Alternate.
-
-### 5. Character Profiles
-
-**User Story:** "As a creator, I want to create and tag characters in my stories for consistency."
-
-**Requirements:**
-
-- Users create and manage character profiles.
-
-- Character profiles store name, backstory, visual references.
-
-- Users tag characters in drafts for linked storytelling.
-
-### 6. Engagement Features
-
-**User Story:** "As a user, I want to like, comment, and share content to interact with the community."
-
-**Requirements:**
-
-- Firestore real-time updates for engagement.
-
-- Comments stored in a separate Firestore collection.
-
-### 7. AI-Powered Video Generation (Week 2)
-
-**User Story:** "As a creator, I want AI to convert my text draft into a narrated video with visuals."
-
-**Requirements:**
-
-- AI-generated video with text-to-speech narration.
-
-- AI maintains character consistency.
-
-- Users can select voice & style for narration.
-
-## Technical Stack & Architecture
-
-- Firebase (Auth, Firestore, Cloud Storage) for backend infrastructure.
-
-- SwiftUI for a responsive and native mobile experience.
-
-- Firestore Indexing for optimized search and categorization.
-
-- Cloud Functions for automated content processing and AI integration.
-
-- SwiftData for local persistance.
-
-## Development Roadmap
-
-Week 1 Focus: Build core features: authentication, video upload, text drafts, categorization, character profiles, engagement features.
-
-Week 2 Focus: Implement AI-powered storytelling: text-to-video generation, character consistency in AI, speculative "What If" generator.
+## Next Steps
+1. Implement AI video generation from text drafts
+2. Add character consistency in AI generation
+3. Develop speculative "What If" story generator
+4. Enhance video feed algorithm
+5. Add real-time updates for user interactions
 

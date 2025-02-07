@@ -8,67 +8,108 @@ struct LoginView: View {
     
     var body: some View {
         NavigationStack {
-            VStack {
-                // Logo/Header
-                Text("Pastport")
-                    .font(.largeTitle)
-                    .padding(.top, 32)
+            ZStack {
+                // Background color
+                Color.pastportBackground
+                    .ignoresSafeArea()
                 
-                // Input fields
-                VStack(spacing: 24) {
-                    TextField("Email", text: $email)
-                        .textInputAutocapitalization(.never)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(authViewModel.isLoading)
+                VStack(spacing: 32) {
+                    // Logo
+                    Image("pastport logo with name")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 200)
+                        .padding(.top, 32)
                     
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(authViewModel.isLoading)
-                }
-                .padding(.horizontal)
-                .padding(.top, 24)
-                
-                // Error message
-                if let error = authViewModel.errorMessage {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                        .padding(.horizontal)
-                }
-                
-                // Sign in button
-                Button {
-                    Task {
-                        do {
-                            try await authViewModel.signIn(withEmail: email, password: password)
-                        } catch {
-                            showError = true
+                    // Input fields
+                    VStack(spacing: 20) {
+                        // Email field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Email")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            TextField("Enter your email", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .padding()
+                                .background(Color(.systemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
+                                )
+                                .disabled(authViewModel.isLoading)
+                        }
+                        
+                        // Password field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Password")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            SecureField("Enter your password", text: $password)
+                                .padding()
+                                .background(Color(.systemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
+                                )
+                                .disabled(authViewModel.isLoading)
                         }
                     }
-                } label: {
-                    if authViewModel.isLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Sign In")
+                    .padding(.horizontal)
+                    
+                    // Error message
+                    if let error = authViewModel.errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal)
                     }
+                    
+                    VStack(spacing: 16) {
+                        // Sign in button
+                        Button {
+                            Task {
+                                do {
+                                    try await authViewModel.signIn(withEmail: email, password: password)
+                                } catch {
+                                    showError = true
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                if authViewModel.isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Sign In")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue)
+                                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                            )
+                            .foregroundColor(.white)
+                        }
+                        .disabled(authViewModel.isLoading)
+                        
+                        // Register link
+                        NavigationLink {
+                            RegistrationView(authViewModel: authViewModel)
+                        } label: {
+                            Text("Don't have an account? Sign up")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
+                        }
+                        .disabled(authViewModel.isLoading)
+                    }
+                    .padding(.horizontal)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding()
-                .disabled(authViewModel.isLoading)
-                
-                // Register link
-                NavigationLink {
-                    RegistrationView(authViewModel: authViewModel)
-                } label: {
-                    Text("Don't have an account? Sign up")
-                        .foregroundColor(.blue)
-                }
-                .disabled(authViewModel.isLoading)
+                .padding(.vertical)
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK") { }

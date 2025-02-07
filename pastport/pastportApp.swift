@@ -26,16 +26,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct pastportApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authViewModel = AuthenticationViewModel()
-    
-    init() {
-        print("DEBUG: Starting app initialization")
-        print("DEBUG: App initialization complete")
-    }
+    @State private var isLoading = true
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(authViewModel)
+            ZStack {
+                // Background color
+                Color.pastportBackground
+                    .ignoresSafeArea()
+                
+                if isLoading {
+                    AppLoadingView()
+                } else {
+                    ContentView()
+                        .environmentObject(authViewModel)
+                }
+            }
+            .task {
+                // Simulate a brief loading time for smooth transition
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    isLoading = false
+                }
+            }
         }
     }
 }

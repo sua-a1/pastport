@@ -59,7 +59,7 @@ This checklist outlines the implementation steps for the character creation func
   - Error state with retry option
   - Success state with generated images
   - Save/discard options
-- [ ] Implement image saving functionality
+- [x] Implement image saving functionality
   - Download generated images
   - Upload to Firebase Storage
   - Update character model

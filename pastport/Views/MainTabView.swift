@@ -6,14 +6,14 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            Text("Home")
+            HomeView()
                 .tabItem {
                     Image(systemName: "house")
                     Text("Home")
                 }
                 .tag(0)
             
-            Text("Discover")
+            DiscoverView()
                 .tabItem {
                     Image(systemName: "magnifyingglass")
                     Text("Discover")
@@ -28,7 +28,7 @@ struct MainTabView: View {
                 }
                 .tag(2)
             
-            Text("Inbox")
+            InboxView()
                 .tabItem {
                     Image(systemName: "message")
                     Text("Inbox")

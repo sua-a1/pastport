@@ -12,49 +12,55 @@ struct CreateView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 32) {
-                    // Title and description
-                    VStack(spacing: 12) {
-                        Text("Create")
-                            .font(.title.bold())
+            ZStack {
+                // Background color
+                Color.pastportBackground
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 32) {
+                        // Title and description
+                        VStack(spacing: 12) {
+                            Text("Create")
+                                .font(.title.bold())
+                            
+                            Text("Choose how you want to tell your story")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 24)
                         
-                        Text("Choose how you want to tell your story")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                        // Creation Options
+                        VStack(spacing: 24) {
+                            // Video Creation Button
+                            CreationOptionButton(
+                                icon: "video.fill",
+                                title: "Create Video",
+                                description: "Record or upload a video to share your story",
+                                action: { showVideoCreation = true }
+                            )
+                            
+                            // AI Draft Button
+                            CreationOptionButton(
+                                icon: "doc.text.fill",
+                                title: "Create AI Draft",
+                                description: "Write your story and let AI help bring it to life",
+                                action: { showDraftCreation = true }
+                            )
+                            
+                            // Character Creation Button
+                            CreationOptionButton(
+                                icon: "person.fill.viewfinder",
+                                title: "Create Character",
+                                description: "Design a character with AI for your stories",
+                                action: { showCharacterCreation = true }
+                            )
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.top, 24)
-                    
-                    // Creation Options
-                    VStack(spacing: 24) {
-                        // Video Creation Button
-                        CreationOptionButton(
-                            icon: "video.fill",
-                            title: "Create Video",
-                            description: "Record or upload a video to share your story",
-                            action: { showVideoCreation = true }
-                        )
-                        
-                        // AI Draft Button
-                        CreationOptionButton(
-                            icon: "doc.text.fill",
-                            title: "Create AI Draft",
-                            description: "Write your story and let AI help bring it to life",
-                            action: { showDraftCreation = true }
-                        )
-                        
-                        // Character Creation Button
-                        CreationOptionButton(
-                            icon: "person.fill.viewfinder",
-                            title: "Create Character",
-                            description: "Design a character with AI for your stories",
-                            action: { showCharacterCreation = true }
-                        )
-                    }
-                    .padding(.horizontal)
+                    .padding(.bottom, 32)
                 }
-                .padding(.bottom, 32)
             }
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showVideoCreation) {

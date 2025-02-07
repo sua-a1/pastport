@@ -548,8 +548,10 @@ private struct GenerationResultsView: View {
             } message: {
                 Text(errorMessage)
             }
-            .fullScreenCover(isPresented: $showingCharacterRefinement) {
-                if !selectedImages.isEmpty {
+        }
+        .fullScreenCover(isPresented: $showingCharacterRefinement) {
+            if !selectedImages.isEmpty {
+                NavigationStack {
                     CharacterRefinementView(
                         selectedImages: Array(selectedImages),
                         viewModel: viewModel,
@@ -641,145 +643,157 @@ private struct CharacterRefinementView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Explanation Section
-                    VStack(spacing: 8) {
-                        Text("Refine Your Character")
-                            .font(.title2.bold())
-                            .multilineTextAlignment(.center)
-                        
-                        Text("Use your selected images to create more personalized variations with different poses and expressions.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top)
-                    
-                    // Selected Images
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ],
-                        spacing: 16
-                    ) {
-                        ForEach(selectedImages, id: \.self) { url in
-                            AsyncImage(url: URL(string: url)) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(height: 150)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Prompt Input
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Describe the variations you want")
-                            .font(.headline)
-                        
-                        TextField("E.g., different poses, expressions, or angles", text: $prompt, axis: .vertical)
-                            .lineLimit(3...6)
-                            .textFieldStyle(.roundedBorder)
-                        
-                        Text("The AI will maintain your character's appearance while applying these variations")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal)
-                    
-                    if !generatedUrls.isEmpty {
-                        // Generated Results
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Generated Variations")
-                                .font(.headline)
-                                .padding(.horizontal)
+            ZStack {
+                // Background color
+                Color.pastportBackground
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Explanation Section
+                        VStack(spacing: 8) {
+                            Text("Refine Your Character")
+                                .font(.title2.bold())
+                                .multilineTextAlignment(.center)
                             
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible())
-                                ],
-                                spacing: 16
-                            ) {
-                                ForEach(generatedUrls, id: \.self) { url in
-                                    Button {
-                                        toggleRefinedImageSelection(url)
-                                    } label: {
-                                        AsyncImage(url: URL(string: url)) { image in
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                        } placeholder: {
-                                            ProgressView()
-                                        }
-                                        .frame(height: 200)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(selectedRefinedImages.contains(url) ? Color.blue : Color.clear, lineWidth: 3)
-                                        )
-                                        .overlay(alignment: .topTrailing) {
-                                            if selectedRefinedImages.contains(url) {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .font(.title2)
-                                                    .foregroundStyle(.blue)
-                                                    .padding(8)
+                            Text("Use your selected images to create more personalized variations with different poses and expressions.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top)
+                        
+                        // Selected Images
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ],
+                            spacing: 16
+                        ) {
+                            ForEach(selectedImages, id: \.self) { url in
+                                AsyncImage(url: URL(string: url)) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    ProgressView()
+                                }
+                                .frame(height: 150)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Prompt Input
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Describe the variations you want")
+                                .font(.headline)
+                            
+                            TextField("E.g., different poses, expressions, or angles", text: $prompt, axis: .vertical)
+                                .lineLimit(3...6)
+                                .padding()
+                                .background(Color(.systemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(.systemGray4), lineWidth: 1)
+                                )
+                            
+                            Text("The AI will maintain your character's appearance while applying these variations")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal)
+                        
+                        if !generatedUrls.isEmpty {
+                            // Generated Results
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Generated Variations")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                LazyVGrid(
+                                    columns: [
+                                        GridItem(.flexible()),
+                                        GridItem(.flexible())
+                                    ],
+                                    spacing: 16
+                                ) {
+                                    ForEach(generatedUrls, id: \.self) { url in
+                                        Button {
+                                            toggleRefinedImageSelection(url)
+                                        } label: {
+                                            AsyncImage(url: URL(string: url)) { image in
+                                                image
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                            } placeholder: {
+                                                ProgressView()
+                                            }
+                                            .frame(height: 200)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(selectedRefinedImages.contains(url) ? Color.blue : Color.clear, lineWidth: 3)
+                                            )
+                                            .overlay(alignment: .topTrailing) {
+                                                if selectedRefinedImages.contains(url) {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .font(.title2)
+                                                        .foregroundStyle(.blue)
+                                                        .padding(8)
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
-                        }
-                        
-                        // Save Button
-                        Button(action: saveRefinedCharacter) {
-                            if isSaving {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.down")
-                                    Text("Save Selected Variations")
+                            
+                            // Save Button
+                            Button(action: saveRefinedCharacter) {
+                                if isSaving {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    HStack {
+                                        Image(systemName: "square.and.arrow.down")
+                                        Text("Save Selected Variations")
+                                    }
                                 }
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue)
+                            )
+                            .foregroundColor(.white)
+                            .disabled(selectedRefinedImages.isEmpty || isSaving)
+                            .padding()
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.blue)
-                        )
-                        .foregroundColor(.white)
-                        .disabled(selectedRefinedImages.isEmpty || isSaving)
-                        .padding()
-                    }
-                    
-                    // Generate Button
-                    if generatedUrls.isEmpty {
-                        Button(action: generateRefinedCharacter) {
-                            if isGenerating {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text("Generate Variations")
+                        
+                        // Generate Button
+                        if generatedUrls.isEmpty {
+                            Button(action: generateRefinedCharacter) {
+                                if isGenerating {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Generate Variations")
+                                }
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue)
+                            )
+                            .foregroundColor(.white)
+                            .disabled(prompt.isEmpty || isGenerating)
+                            .padding(.horizontal)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.blue)
-                        )
-                        .foregroundColor(.white)
-                        .disabled(prompt.isEmpty || isGenerating)
-                        .padding(.horizontal)
                     }
                 }
             }
