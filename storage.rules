@@ -9,7 +9,7 @@ service firebase.storage {
     
     // Function to check if user owns the file
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
     
     // Function to check if file is a valid image
@@ -22,6 +22,12 @@ service firebase.storage {
     function isValidVideo() {
       return request.resource.contentType.matches('video/.*')
         && request.resource.size < 100 * 1024 * 1024;  // 100MB max
+    }
+    
+    // Allow access to all character image paths
+    match /characters/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
     }
     
     // Draft attachments rules

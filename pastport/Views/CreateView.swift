@@ -7,78 +7,55 @@ import AVKit
 struct CreateView: View {
     @State private var showVideoCreation = false
     @State private var showDraftCreation = false
+    @State private var showCharacterCreation = false
     @EnvironmentObject private var authViewModel: AuthenticationViewModel
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Title and description
-                VStack(spacing: 8) {
-                    Text("Create")
-                        .font(.title)
-                        .fontWeight(.bold)
+            ScrollView {
+                VStack(spacing: 32) {
+                    // Title and description
+                    VStack(spacing: 12) {
+                        Text("Create")
+                            .font(.title.bold())
+                        
+                        Text("Choose how you want to tell your story")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 24)
                     
-                    Text("Choose how you want to tell your story")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top)
-                
-                // Video Creation Button
-                Button {
-                    showVideoCreation = true
-                } label: {
-                    VStack(spacing: 12) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 32))
+                    // Creation Options
+                    VStack(spacing: 24) {
+                        // Video Creation Button
+                        CreationOptionButton(
+                            icon: "video.fill",
+                            title: "Create Video",
+                            description: "Record or upload a video to share your story",
+                            action: { showVideoCreation = true }
+                        )
                         
-                        Text("Create Video")
-                            .font(.headline)
+                        // AI Draft Button
+                        CreationOptionButton(
+                            icon: "doc.text.fill",
+                            title: "Create AI Draft",
+                            description: "Write your story and let AI help bring it to life",
+                            action: { showDraftCreation = true }
+                        )
                         
-                        Text("Record or upload a video to share your story")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                        // Character Creation Button
+                        CreationOptionButton(
+                            icon: "person.fill.viewfinder",
+                            title: "Create Character",
+                            description: "Design a character with AI for your stories",
+                            action: { showCharacterCreation = true }
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemBackground))
-                            .shadow(radius: 2)
-                    )
+                    .padding(.horizontal)
                 }
-                .buttonStyle(.plain)
-                
-                // AI Draft Button
-                Button {
-                    showDraftCreation = true
-                } label: {
-                    VStack(spacing: 12) {
-                        Image(systemName: "doc.text.fill")
-                            .font(.system(size: 32))
-                        
-                        Text("Create AI Draft")
-                            .font(.headline)
-                        
-                        Text("Write your story and let AI help bring it to life")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemBackground))
-                            .shadow(radius: 2)
-                    )
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
+                .padding(.bottom, 32)
             }
-            .padding()
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showVideoCreation) {
                 VideoRecordingView(showCameraView: $showVideoCreation, selectedTab: .constant(2))
@@ -94,7 +71,52 @@ struct CreateView: View {
                     .environmentObject(authViewModel)
                 }
             }
+            .sheet(isPresented: $showCharacterCreation) {
+                NavigationStack {
+                    CharacterCreationView(viewModel: CharacterCreationViewModel(user: authViewModel.currentUser))
+                        .environmentObject(authViewModel)
+                }
+            }
         }
+    }
+}
+
+// MARK: - Supporting Views
+private struct CreationOptionButton: View {
+    let icon: String
+    let title: String
+    let description: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 16) {
+                // Icon
+                Image(systemName: icon)
+                    .font(.system(size: 40))
+                    .foregroundStyle(.blue)
+                
+                // Text Content
+                VStack(spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                    
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

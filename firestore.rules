@@ -8,7 +8,48 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasValidCharacterData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['id', 'userId', 'name', 'description', 'stylePrompt', 'referenceImages', 'generatedImages', 'status', 'createdAt', 'updatedAt']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 &&
+             data.description is string && data.description.size() > 0 &&
+             data.stylePrompt is string && data.stylePrompt.size() > 0 &&
+             data.referenceImages is list &&
+             data.generatedImages is list &&
+             data.status in ['not_started', 'generating', 'completed', 'failed'] &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+    
+    function hasValidReferenceImage() {
+      let image = request.resource.data;
+      return image.keys().hasAll(['url', 'prompt', 'weight']) &&
+             image.url is string && image.url.size() > 0 &&
+             image.prompt is string && image.prompt.size() > 0 &&
+             image.weight is number && image.weight >= 0 && image.weight <= 1;
+    }
+    
+    // Characters collection rules
+    match /characters/{characterId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.isPublic == true
+      );
+      
+      allow create: if isAuthenticated() &&
+                      hasValidCharacterData();
+      
+      allow update: if isAuthenticated() &&
+                      isOwner(resource.data.userId) &&
+                      hasValidCharacterData() &&
+                      request.resource.data.userId == resource.data.userId;
+      
+      allow delete: if isAuthenticated() &&
+                      isOwner(resource.data.userId);
     }
     
     // Draft validation functions
