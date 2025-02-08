@@ -76,7 +76,7 @@ actor LumaAIService {
     // MARK: - Constants
     private enum Constants {
         static let baseUrl = "https://api.lumalabs.ai/dream-machine/v1"
-        static let apiKey = "luma-06baadf0-2cd5-4248-828b-4fe02a133104-cef3cdb8-b368-445c-81c6-fd6f877d332d"
+        static let apiKey = ProcessInfo.processInfo.environment["LUMALABS_API_KEY"] ?? ""
     }
     
     // MARK: - Properties

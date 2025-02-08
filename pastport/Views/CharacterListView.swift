@@ -8,17 +8,48 @@ struct CharacterListView: View {
     @State private var selectedCharacter: Character?
     
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                ProgressView("Loading characters...")
-            } else if viewModel.characters.isEmpty {
-                ContentUnavailableView(
-                    "No Characters Yet",
-                    systemImage: "person.fill.questionmark",
-                    description: Text("Create your first character to bring your stories to life!")
-                )
-            } else {
-                characterList
+        ZStack {
+            Color.pastportBackground
+                .ignoresSafeArea()
+            
+            ScrollView {
+                if viewModel.isLoading {
+                    ProgressView("Loading characters...")
+                        .padding()
+                } else if viewModel.characters.isEmpty {
+                    ContentUnavailableView(
+                        "No Characters Yet",
+                        systemImage: "person.fill.questionmark",
+                        description: Text("Create your first character to bring your stories to life!")
+                    )
+                    .padding()
+                } else {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 24),
+                            GridItem(.flexible(), spacing: 24)
+                        ],
+                        spacing: 24
+                    ) {
+                        ForEach(viewModel.characters) { character in
+                            CharacterCell(character: character)
+                                .onTapGesture {
+                                    selectedCharacter = character
+                                    showingCharacterDetail = true
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        characterToDelete = character
+                                        showingDeleteConfirmation = true
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                }
             }
         }
         .alert("Delete Character", isPresented: $showingDeleteConfirmation) {
@@ -39,32 +70,6 @@ struct CharacterListView: View {
             }
         }
     }
-    
-    private var characterList: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 16),
-                GridItem(.flexible(), spacing: 16)
-            ], spacing: 16) {
-                ForEach(viewModel.characters) { character in
-                    CharacterCell(character: character)
-                        .onTapGesture {
-                            selectedCharacter = character
-                            showingCharacterDetail = true
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                characterToDelete = character
-                                showingDeleteConfirmation = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                }
-            }
-            .padding()
-        }
-    }
 }
 
 // MARK: - Supporting Views
@@ -72,7 +77,7 @@ private struct CharacterCell: View {
     let character: Character
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // Character Image
             if let imageUrl = character.generatedImages.first {
                 AsyncImage(url: URL(string: imageUrl)) { image in
@@ -83,9 +88,9 @@ private struct CharacterCell: View {
                     ProgressView()
                 }
                 .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(.systemGray6))
                     .frame(height: 200)
                     .overlay {
@@ -96,7 +101,7 @@ private struct CharacterCell: View {
             }
             
             // Character Info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(character.name)
                     .font(.headline)
                     .lineLimit(1)
@@ -106,12 +111,14 @@ private struct CharacterCell: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 12)
         }
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.1), radius: 4)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#E4E4E4"))
+                .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
         )
     }
 } 
