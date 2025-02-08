@@ -3,7 +3,7 @@ import FirebaseFirestore
 
 struct ProfileDetailView: View {
     let authViewModel: AuthenticationViewModel
-    @StateObject private var viewModel: ProfileViewModel
+    @ObservedObject private var viewModel: ProfileViewModel
     @State private var showEditProfile = false
     @State private var showSignOutAlert = false
     @State private var showVideoFeed = false
@@ -14,7 +14,7 @@ struct ProfileDetailView: View {
     
     init(authViewModel: AuthenticationViewModel) {
         self.authViewModel = authViewModel
-        self._viewModel = StateObject(wrappedValue: ProfileViewModel(user: authViewModel.currentUser!))
+        self._viewModel = ObservedObject(wrappedValue: ProfileViewModel(user: authViewModel.currentUser!))
     }
     
     var body: some View {
@@ -52,33 +52,34 @@ struct ProfileDetailView: View {
                             }
                             .padding(.horizontal)
                             
-                            // Tab Content
-                            TabView(selection: $selectedTab) {
-                                // Videos Tab
-                                ScrollView {
-                                    VideoContentView(
-                                        isLoading: viewModel.isLoadingVideos,
-                                        videos: viewModel.userPosts,
-                                        showVideoFeed: $showVideoFeed,
-                                        selectedVideoIndex: $selectedVideoIndex
-                                    )
-                                }
-                                .tag(ContentTab.videos)
-                                
-                                // Drafts Tab
-                                DraftContentView(
-                                    isLoading: viewModel.isLoadingDrafts,
-                                    drafts: viewModel.userDrafts,
-                                    onRefresh: {
-                                        Task {
-                                            await viewModel.fetchUserDrafts()
-                                        }
+                            // Content based on selected tab
+                            Group {
+                                switch selectedTab {
+                                case .videos:
+                                    ScrollView {
+                                        VideoContentView(
+                                            isLoading: viewModel.isLoadingVideos,
+                                            videos: viewModel.userPosts,
+                                            showVideoFeed: $showVideoFeed,
+                                            selectedVideoIndex: $selectedVideoIndex
+                                        )
                                     }
-                                )
-                                .padding(.horizontal)
-                                .tag(ContentTab.drafts)
+                                case .drafts:
+                                    DraftContentView(
+                                        isLoading: viewModel.isLoadingDrafts,
+                                        drafts: viewModel.userDrafts,
+                                        onRefresh: {
+                                            Task {
+                                                await viewModel.fetchUserDrafts()
+                                            }
+                                        }
+                                    )
+                                    .padding(.horizontal)
+                                case .characters:
+                                    CharacterListView(viewModel: CharacterListViewModel(userId: viewModel.user.id))
+                                        .padding(.horizontal)
+                                }
                             }
-                            .tabViewStyle(.page(indexDisplayMode: .never))
                             .frame(minHeight: UIScreen.main.bounds.width * 1.5)
                         }
                         .padding(.bottom)
@@ -90,6 +91,9 @@ struct ProfileDetailView: View {
                                 await viewModel.fetchUserPosts()
                             case .drafts:
                                 await viewModel.fetchUserDrafts()
+                            case .characters:
+                                // Characters are fetched automatically by the CharacterListViewModel
+                                break
                             }
                         }
                     }
@@ -106,6 +110,9 @@ struct ProfileDetailView: View {
                                 if viewModel.userDrafts.isEmpty {
                                     await viewModel.fetchUserDrafts()
                                 }
+                            case .characters:
+                                // Characters are fetched automatically by the CharacterListViewModel
+                                break
                             }
                         }
                     }
@@ -172,6 +179,10 @@ struct ProfileDetailView: View {
                     await viewModel.fetchUserDrafts()
                 }
             }
+        }
+        .task {
+            // Load initial data when view appears
+            await viewModel.loadInitialData()
         }
         .onDisappear {
             // Remove observer when view disappears
@@ -334,6 +345,7 @@ private struct DraftRowView: View {
 private enum ContentTab: Int, CaseIterable, Identifiable {
     case videos
     case drafts
+    case characters
     
     var id: Int { rawValue }
     
@@ -341,6 +353,7 @@ private enum ContentTab: Int, CaseIterable, Identifiable {
         switch self {
         case .videos: "Videos"
         case .drafts: "Drafts"
+        case .characters: "Characters"
         }
     }
 }

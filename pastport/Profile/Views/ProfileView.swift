@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
-    @StateObject var viewModel: ProfileViewModel
+    @ObservedObject var viewModel: ProfileViewModel
     @State private var showingEditProfile = false
     
     var body: some View {
@@ -149,7 +149,7 @@ struct InterestsSection: View {
     var body: some View {
         Section("Interests") {
             ForEach(categories, id: \.self) { category in
-                Toggle(category, isOn: Binding(
+                Toggle(category, isOn: .init(
                     get: { selectedCategories.contains(category) },
                     set: { isSelected in
                         if isSelected {

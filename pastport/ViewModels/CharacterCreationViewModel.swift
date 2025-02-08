@@ -154,8 +154,7 @@ import FirebaseFirestore
                         prompt: state.prompt ?? "",
                         weight: state.weight
                     )
-                },
-                status: .generating
+                }
             )
             
             try await db.collection("characters").document(character.id).setData(character.firestoreData)
@@ -314,8 +313,7 @@ import FirebaseFirestore
                 name: name,
                 characterDescription: characterDescription,
                 stylePrompt: stylePrompt,
-                generatedImages: uploadedUrls,
-                status: .completed
+                generatedImages: uploadedUrls
             )
             
             try await db.collection("characters")

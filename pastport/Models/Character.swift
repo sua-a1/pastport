@@ -1,19 +1,44 @@
 import Foundation
 import SwiftData
+import FirebaseFirestore
 
 @Model
-final class Character {
+final class Character: Decodable {
     // MARK: - Properties
     var id: String
     var userId: String
     var name: String
     var characterDescription: String
     var stylePrompt: String
-    var referenceImages: [ReferenceImage]
     var generatedImages: [String]
-    var status: GenerationStatus
+    var referenceImages: [ReferenceImage]
     var createdAt: Date
     var updatedAt: Date
+    
+    struct ReferenceImage: Codable {
+        let url: String
+        let prompt: String
+        let weight: Double
+    }
+    
+    // MARK: - Decodable
+    enum CodingKeys: String, CodingKey {
+        case id, userId, name, stylePrompt, generatedImages, referenceImages, createdAt, updatedAt
+        case characterDescription = "description"
+    }
+    
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userId = try container.decode(String.self, forKey: .userId)
+        name = try container.decode(String.self, forKey: .name)
+        characterDescription = try container.decode(String.self, forKey: .characterDescription)
+        stylePrompt = try container.decode(String.self, forKey: .stylePrompt)
+        generatedImages = try container.decode([String].self, forKey: .generatedImages)
+        referenceImages = try container.decode([ReferenceImage].self, forKey: .referenceImages)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    }
     
     // MARK: - Initialization
     init(
@@ -22,9 +47,8 @@ final class Character {
         name: String,
         characterDescription: String,
         stylePrompt: String,
-        referenceImages: [ReferenceImage] = [],
         generatedImages: [String] = [],
-        status: GenerationStatus = .notStarted,
+        referenceImages: [ReferenceImage] = [],
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -33,32 +57,13 @@ final class Character {
         self.name = name
         self.characterDescription = characterDescription
         self.stylePrompt = stylePrompt
-        self.referenceImages = referenceImages
         self.generatedImages = generatedImages
-        self.status = status
+        self.referenceImages = referenceImages
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-}
-
-// MARK: - Supporting Types
-extension Character {
-    enum GenerationStatus: String, Codable {
-        case notStarted = "not_started"
-        case generating = "generating"
-        case completed = "completed"
-        case failed = "failed"
-    }
     
-    struct ReferenceImage: Codable {
-        let url: String
-        let prompt: String?
-        let weight: Double
-    }
-}
-
-// MARK: - Firestore Conversion
-extension Character {
+    // MARK: - Firestore Conversion
     var firestoreData: [String: Any] {
         [
             "id": id,
@@ -72,22 +77,49 @@ extension Character {
                 "weight": $0.weight
             ] },
             "generatedImages": generatedImages,
-            "status": status.rawValue,
             "createdAt": createdAt,
             "updatedAt": updatedAt
         ]
     }
-    
+}
+
+// MARK: - Supporting Types
+extension Character {
+    enum GenerationStatus: String, Codable {
+        case notStarted = "not_started"
+        case generating = "generating"
+        case completed = "completed"
+        case failed = "failed"
+    }
+}
+
+// MARK: - Identifiable
+extension Character: Identifiable { }
+
+// MARK: - Debug Description
+extension Character: CustomDebugStringConvertible {
+    var debugDescription: String {
+        """
+        Character(
+            id: \(id),
+            name: \(name),
+            referenceImages: \(referenceImages.count),
+            generatedImages: \(generatedImages.count)
+        )
+        """
+    }
+}
+
+// MARK: - Firestore Conversion
+extension Character {
     convenience init?(id: String, data: [String: Any]) {
         guard
             let userId = data["userId"] as? String,
             let name = data["name"] as? String,
-            let description = data["description"] as? String,
+            let characterDescription = data["description"] as? String,
             let stylePrompt = data["stylePrompt"] as? String,
             let referenceImagesData = data["referenceImages"] as? [[String: Any]],
             let generatedImages = data["generatedImages"] as? [String],
-            let statusRaw = data["status"] as? String,
-            let status = GenerationStatus(rawValue: statusRaw),
             let createdAt = data["createdAt"] as? Date,
             let updatedAt = data["updatedAt"] as? Date
         else { return nil }
@@ -106,31 +138,12 @@ extension Character {
             id: id,
             userId: userId,
             name: name,
-            characterDescription: description,
+            characterDescription: characterDescription,
             stylePrompt: stylePrompt,
-            referenceImages: referenceImages,
             generatedImages: generatedImages,
-            status: status,
+            referenceImages: referenceImages,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
-    }
-}
-
-// MARK: - Identifiable
-extension Character: Identifiable { }
-
-// MARK: - Debug Description
-extension Character: CustomDebugStringConvertible {
-    var debugDescription: String {
-        """
-        Character(
-            id: \(id),
-            name: \(name),
-            status: \(status.rawValue),
-            referenceImages: \(referenceImages.count),
-            generatedImages: \(generatedImages.count)
-        )
-        """
     }
 } 

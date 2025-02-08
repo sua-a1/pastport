@@ -144,6 +144,52 @@ struct Draft: Identifiable, Codable {
             return nil
         }
         
+        // Handle timestamps
+        let createdAt: Date
+        let updatedAt: Date
+        
+        if let createdTimestamp = data["createdAt"] as? Timestamp {
+            createdAt = createdTimestamp.dateValue()
+        } else {
+            print("DEBUG: Failed to parse createdAt timestamp")
+            createdAt = Date()
+        }
+        
+        if let updatedTimestamp = data["updatedAt"] as? Timestamp {
+            updatedAt = updatedTimestamp.dateValue()
+        } else {
+            print("DEBUG: Failed to parse updatedAt timestamp")
+            updatedAt = createdAt
+        }
+        
+        // Handle arrays
+        let imageUrls: [String]
+        if let urls = data["imageUrls"] as? [String] {
+            imageUrls = urls
+        } else if let urls = (data["imageUrls"] as? NSArray)?.compactMap({ $0 as? String }) {
+            imageUrls = urls
+        } else {
+            imageUrls = []
+        }
+        
+        let videoUrls: [String]
+        if let urls = data["videoUrls"] as? [String] {
+            videoUrls = urls
+        } else if let urls = (data["videoUrls"] as? NSArray)?.compactMap({ $0 as? String }) {
+            videoUrls = urls
+        } else {
+            videoUrls = []
+        }
+        
+        let referenceTextIds: [String]
+        if let ids = data["referenceTextIds"] as? [String] {
+            referenceTextIds = ids
+        } else if let ids = (data["referenceTextIds"] as? NSArray)?.compactMap({ $0 as? String }) {
+            referenceTextIds = ids
+        } else {
+            referenceTextIds = []
+        }
+        
         return Draft(
             id: id,
             userId: userId,
@@ -152,11 +198,11 @@ struct Draft: Identifiable, Codable {
             category: category,
             subcategory: subcategory,
             status: status,
-            imageUrls: data["imageUrls"] as? [String] ?? [],
-            videoUrls: data["videoUrls"] as? [String] ?? [],
-            referenceTextIds: data["referenceTextIds"] as? [String] ?? [],
-            createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
-            updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+            imageUrls: imageUrls,
+            videoUrls: videoUrls,
+            referenceTextIds: referenceTextIds,
+            createdAt: createdAt,
+            updatedAt: updatedAt
         )
     }
     

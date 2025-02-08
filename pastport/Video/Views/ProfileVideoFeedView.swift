@@ -17,7 +17,9 @@ struct ProfileVideoFeedView: View {
         
         if let url = URL(string: post.videoUrl) {
             await playerManager.setupPlayer(with: url, postId: post.id)
-            playerManager.play()
+            await MainActor.run {
+                playerManager.play()
+            }
         }
     }
     
@@ -35,7 +37,9 @@ struct ProfileVideoFeedView: View {
                             .id(index)
                             .onAppear {
                                 print("DEBUG: Video view appeared at index \(index)")
-                                pendingIndex = index
+                                Task { @MainActor in
+                                    pendingIndex = index
+                                }
                             }
                         }
                     }
@@ -46,44 +50,46 @@ struct ProfileVideoFeedView: View {
                 .simultaneousGesture(
                     DragGesture()
                         .onChanged { _ in
-                            if !isScrolling {
-                                isScrolling = true
-                                playerManager.pause()
-                                print("DEBUG: Started scrolling")
+                            Task { @MainActor in
+                                if !isScrolling {
+                                    isScrolling = true
+                                    playerManager.pause()
+                                    print("DEBUG: Started scrolling")
+                                }
                             }
                         }
                         .onEnded { _ in
                             print("DEBUG: Drag ended")
-                            // Handle scroll end immediately
-                            if let index = pendingIndex {
-                                print("DEBUG: Will play pending video at index \(index)")
-                                currentIndex = index
-                                Task {
+                            Task { @MainActor in
+                                // Handle scroll end immediately
+                                if let index = pendingIndex {
+                                    print("DEBUG: Will play pending video at index \(index)")
+                                    currentIndex = index
                                     await playVideo(at: index)
                                 }
+                                isScrolling = false
                             }
-                            isScrolling = false
                         }
                 )
                 .onChange(of: currentIndex) { oldValue, newValue in
                     print("DEBUG: Scroll position changed from \(oldValue?.description ?? "nil") to \(newValue?.description ?? "nil")")
                     
-                    if let newValue = newValue {
-                        // Only switch videos if not scrolling and index changed
-                        if !isScrolling && newValue != oldValue {
-                            print("DEBUG: Index changed while not scrolling, switching to video at index \(newValue)")
-                            Task {
+                    Task { @MainActor in
+                        if let newValue = newValue {
+                            // Only switch videos if not scrolling and index changed
+                            if !isScrolling && newValue != oldValue {
+                                print("DEBUG: Index changed while not scrolling, switching to video at index \(newValue)")
                                 if let oldValue = oldValue {
                                     print("DEBUG: Will stop video at index \(oldValue)")
                                     playerManager.pause()
                                 }
                                 await playVideo(at: newValue)
                             }
+                        } else if let pending = pendingIndex {
+                            // Recover position using pending index
+                            print("DEBUG: Recovering position to pending index: \(pending)")
+                            currentIndex = pending
                         }
-                    } else if let pending = pendingIndex {
-                        // Recover position using pending index
-                        print("DEBUG: Recovering position to pending index: \(pending)")
-                        currentIndex = pending
                     }
                 }
             }
@@ -103,15 +109,19 @@ struct ProfileVideoFeedView: View {
             .task {
                 // Set initial state immediately
                 print("DEBUG: Setting initial state with index \(initialIndex)")
-                currentIndex = initialIndex
-                pendingIndex = initialIndex
+                await MainActor.run {
+                    currentIndex = initialIndex
+                    pendingIndex = initialIndex
+                }
                 
                 // Start playing initial video after a short delay
                 try? await Task.sleep(for: .milliseconds(100))
                 await playVideo(at: initialIndex)
                 
                 // Mark as initialized after initial playback
-                isInitialized = true
+                await MainActor.run {
+                    isInitialized = true
+                }
             }
         }
         .ignoresSafeArea(edges: .all)
