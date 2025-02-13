@@ -16,18 +16,38 @@ import FirebaseFirestore
         var error: String?
     }
     
-    enum CreationState {
+    enum CreationState: Equatable {
         case editing
         case generating
         case completed([String])
         case failed(Error)
+        case saving
+        
+        static func == (lhs: CreationState, rhs: CreationState) -> Bool {
+            switch (lhs, rhs) {
+            case (.editing, .editing),
+                 (.generating, .generating),
+                 (.saving, .saving):
+                return true
+            case (.completed(let lhsUrls), .completed(let rhsUrls)):
+                return lhsUrls == rhsUrls
+            case (.failed, .failed):
+                // Consider errors equal for UI purposes
+                return true
+            default:
+                return false
+            }
+        }
     }
     
     // MARK: - Properties
     let user: User?
-    private let lumaService = LumaAIService()
-    private let storage = Storage.storage()
+    var character: Character?
     private let db = Firestore.firestore()
+    private let storage = Storage.storage()
+    private var lumaService: LumaAIService?
+    private var lumaServiceError: Error?
+    private var temporaryGeneratedUrls: [String] = []
     
     // Form State
     var name = ""
@@ -35,6 +55,7 @@ import FirebaseFirestore
     var stylePrompt = ""
     var referenceImages: [ReferenceImageState] = []
     var state: CreationState = .editing
+    var isRefining = false
     
     // Validation
     var isValid: Bool {
@@ -48,6 +69,14 @@ import FirebaseFirestore
     // MARK: - Initialization
     init(user: User?) {
         self.user = user
+        
+        // Initialize Luma service
+        do {
+            self.lumaService = try LumaAIService()
+        } catch {
+            print("DEBUG: Failed to initialize Luma service: \(error)")
+            self.lumaServiceError = error
+        }
     }
     
     // MARK: - Public Methods
@@ -65,6 +94,8 @@ import FirebaseFirestore
             throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not found"])
         }
         
+        print("DEBUG: Starting reference image upload for user \(userId)")
+        
         // Upload images in parallel
         try await withThrowingTaskGroup(of: Void.self) { group in
             for (index, imageState) in referenceImages.enumerated() {
@@ -77,58 +108,69 @@ import FirebaseFirestore
                         self.referenceImages[index].uploadProgress = 0
                     }
                     
-                    // Generate unique filename
+                    // Generate unique filename using UUID
                     let filename = "\(UUID().uuidString).jpg"
                     let path = "characters/\(userId)/reference_images/\(filename)"
+                    print("DEBUG: Uploading image \(index) to path: \(path)")
+                    
                     let storageRef = self.storage.reference().child(path)
                     
                     // Compress image
-                    let compressedData = try image.jpegData(compressionQuality: 0.7)
-                    
-                    // Upload with progress tracking
-                    let url = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-                        let uploadTask = storageRef.putData(compressedData!) { metadata, error in
-                            if let error = error {
-                                continuation.resume(throwing: error)
-                                return
-                            }
-                            
-                            storageRef.downloadURL { url, error in
-                                if let error = error {
-                                    continuation.resume(throwing: error)
-                                    return
-                                }
-                                
-                                continuation.resume(returning: url!.absoluteString)
-                            }
-                        }
-                        
-                        uploadTask.observe(.progress) { snapshot in
-                            let progress = Double(snapshot.progress!.completedUnitCount) / Double(snapshot.progress!.totalUnitCount)
-                            Task { @MainActor in
-                                self.referenceImages[index].uploadProgress = progress
-                            }
-                        }
+                    guard let compressedData = image.jpegData(compressionQuality: 0.7) else {
+                        throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
                     }
                     
-                    // Update state with URL
-                    await MainActor.run {
-                        self.referenceImages[index].url = url
-                        self.referenceImages[index].isUploading = false
-                        self.referenceImages[index].uploadProgress = 1.0
+                    // Create metadata
+                    let metadata = StorageMetadata()
+                    metadata.contentType = "image/jpeg"
+                    
+                    print("DEBUG: Starting upload for image \(index) with size: \(compressedData.count) bytes")
+                    
+                    // Upload with async/await
+                    do {
+                        // Upload the data
+                        _ = try await storageRef.putDataAsync(compressedData, metadata: metadata)
+                        print("DEBUG: Successfully uploaded image \(index)")
+                        
+                        // Get download URL
+                        let url = try await storageRef.downloadURL()
+                        print("DEBUG: Got download URL for image \(index): \(url.absoluteString)")
+                        
+                        // Update state with URL
+                        await MainActor.run {
+                            self.referenceImages[index].url = url.absoluteString
+                            self.referenceImages[index].isUploading = false
+                            self.referenceImages[index].uploadProgress = 1.0
+                        }
+                    } catch {
+                        print("DEBUG: Failed to upload image \(index): \(error)")
+                        throw error
                     }
                 }
             }
             
-            // Wait for all uploads to complete
+            print("DEBUG: Waiting for all uploads to complete")
             try await group.waitForAll()
+            print("DEBUG: All reference image uploads completed successfully")
         }
     }
     
+    // MARK: - Character Generation Methods
     func generateCharacter() async throws {
         guard let userId = user?.id else {
             throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not found"])
         }
+        
+        // Check if Luma service is available
+        if let error = lumaServiceError {
+            throw error
+        }
+        
+        guard let lumaService = lumaService else {
+            throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Luma AI service is not initialized"])
+        }
+        
+        print("DEBUG: Starting character generation for user \(userId)")
         
         // Update state
         await MainActor.run {
@@ -136,53 +178,42 @@ import FirebaseFirestore
         }
         
         do {
-            // 1. Upload reference images if needed
-            if referenceImages.contains(where: { $0.url == nil }) {
-                try await uploadReferenceImages()
-            }
+            // Upload reference images first
+            try await uploadReferenceImages()
             
-            // 2. Create character in Firestore with initial state
-            let character = Character(
-                userId: userId,
-                name: name,
-                characterDescription: characterDescription,
-                stylePrompt: stylePrompt,
-                referenceImages: referenceImages.compactMap { state in
-                    guard let url = state.url else { return nil }
-                    return Character.ReferenceImage(
-                        url: url,
-                        prompt: state.prompt ?? "",
-                        weight: state.weight
-                    )
-                }
-            )
-            
-            try await db.collection("characters").document(character.id).setData(character.firestoreData)
-            
-            // 3. Build combined prompt
+            // Build combined prompt
             var combinedPrompt = stylePrompt + ". " + characterDescription
             combinedPrompt += ". High quality, detailed character design, professional concept art"
             
-            // 4. Generate multiple variations
+            print("DEBUG: Built combined prompt: \(combinedPrompt)")
+            
+            // Get reference images with URLs
+            let references = referenceImages.compactMap { state -> LumaAIService.ReferenceImage? in
+                guard let url = state.url else { return nil }
+                return LumaAIService.ReferenceImage(
+                    url: url,
+                    prompt: state.prompt,
+                    weight: state.weight
+                )
+            }
+            
+            print("DEBUG: Using \(references.count) reference images for generation")
+            
+            // Generate multiple variations
+            print("DEBUG: Starting Luma AI generation")
             let generatedUrls = try await lumaService.generateImage(
                 prompt: combinedPrompt,
-                references: character.referenceImages.map { ref in
-                    LumaAIService.ReferenceImage(url: ref.url, prompt: ref.prompt, weight: ref.weight)
-                },
+                references: references,
                 numOutputs: 2,
-                guidanceScale: 12.0, // Higher guidance for character consistency
-                steps: 50 // More steps for quality
+                guidanceScale: 12.0,
+                steps: 50
             )
             
-            // 5. Update character with generated images
-            try await db.collection("characters").document(character.id).updateData([
-                "generatedImages": generatedUrls,
-                "status": Character.GenerationStatus.completed.rawValue,
-                "updatedAt": Date()
-            ])
+            print("DEBUG: Successfully generated \(generatedUrls.count) images from Luma AI")
             
-            // 6. Update state
+            // Store URLs temporarily
             await MainActor.run {
+                temporaryGeneratedUrls = generatedUrls
                 state = .completed(generatedUrls)
             }
             
@@ -191,15 +222,26 @@ import FirebaseFirestore
             await MainActor.run {
                 state = .failed(error)
             }
+            throw error
         }
     }
     
     func generateCharacterWithReference(selectedImages: [String], prompt: String) async throws -> [String] {
         print("DEBUG: Starting character reference generation with \(selectedImages.count) reference images")
         
+        // Check if Luma service is available
+        if let error = lumaServiceError {
+            throw error
+        }
+        
+        guard let lumaService = lumaService else {
+            throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Luma AI service is not initialized"])
+        }
+        
         // Update state
         await MainActor.run {
             state = .generating
+            isRefining = true
         }
         
         do {
@@ -219,6 +261,7 @@ import FirebaseFirestore
             
             // Update state
             await MainActor.run {
+                temporaryGeneratedUrls = generatedUrls
                 state = .completed(generatedUrls)
             }
             
@@ -228,21 +271,124 @@ import FirebaseFirestore
             print("DEBUG: Character reference generation failed: \(error)")
             await MainActor.run {
                 state = .failed(error)
+                isRefining = false
             }
             throw error
         }
     }
     
-    func saveCharacterImages(_ images: [String]) async throws {
+    // MARK: - Save Methods
+    func saveNewCharacter(selectedImages: [String]) async throws {
         guard let userId = user?.id else {
             throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not found"])
         }
         
-        print("DEBUG: Saving \(images.count) character images")
+        print("DEBUG: Starting new character save with \(selectedImages.count) selected images")
         
-        // Download and re-upload images to our storage
-        let uploadedUrls = try await withThrowingTaskGroup(of: String.self) { group in
-            for imageUrl in images {
+        do {
+            // 1. Upload reference images
+            try await uploadReferenceImages()
+            
+            // 2. Upload selected generated images
+            let uploadedUrls = try await uploadSelectedImages(selectedImages)
+            
+            // 3. Create character in Firestore
+            let character = Character(
+                userId: userId,
+                name: name,
+                characterDescription: characterDescription,
+                stylePrompt: stylePrompt,
+                generatedImages: uploadedUrls,
+                referenceImages: referenceImages.compactMap { state in
+                    guard let url = state.url else { return nil }
+                    return Character.ReferenceImage(
+                        url: url,
+                        prompt: state.prompt ?? "",
+                        weight: state.weight
+                    )
+                },
+                status: .completed
+            )
+            
+            // 4. Save to Firestore
+            try await db.collection("characters").document(character.id).setData(character.firestoreData)
+            print("DEBUG: Successfully saved new character")
+            
+            await MainActor.run {
+                self.character = character
+                state = .completed(uploadedUrls)
+            }
+            
+        } catch {
+            print("DEBUG: Failed to save character: \(error)")
+            await MainActor.run {
+                state = .failed(error)
+            }
+            throw error
+        }
+    }
+    
+    func saveRefinedCharacter(characterId: String, selectedImages: [String]) async throws {
+        print("DEBUG: Starting refined character save with \(selectedImages.count) selected images")
+        
+        do {
+            // 1. Upload selected images
+            let uploadedUrls = try await uploadSelectedImages(selectedImages)
+            
+            // 2. Get current character document
+            let characterRef = db.collection("characters").document(characterId)
+            let snapshot = try await characterRef.getDocument()
+            
+            guard let data = snapshot.data(),
+                  var currentImages = data["generatedImages"] as? [String] else {
+                throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get current images"])
+            }
+            
+            print("DEBUG: Current images count before update: \(currentImages.count)")
+            print("DEBUG: New images to add: \(uploadedUrls.count)")
+            
+            // 3. Append new images to existing ones
+            currentImages.append(contentsOf: uploadedUrls)
+            
+            print("DEBUG: Total images after merge: \(currentImages.count)")
+            
+            // 4. Update Firestore
+            let updateData: [String: Any] = [
+                "generatedImages": currentImages,
+                "status": Character.GenerationStatus.completed.rawValue,
+                "updatedAt": FieldValue.serverTimestamp()
+            ]
+            
+            try await characterRef.updateData(updateData)
+            print("DEBUG: Successfully saved refined character images")
+            
+            // 5. Update local character state
+            if var updatedCharacter = Character(id: characterId, data: data) {
+                updatedCharacter.generatedImages = currentImages
+                await MainActor.run {
+                    self.character = updatedCharacter
+                    state = .completed(currentImages)
+                }
+            }
+            
+        } catch {
+            print("DEBUG: Failed to save refined character: \(error)")
+            await MainActor.run {
+                state = .failed(error)
+            }
+            throw error
+        }
+    }
+    
+    private func uploadSelectedImages(_ images: [String]) async throws -> [String] {
+        guard let userId = user?.id else {
+            throw NSError(domain: "CharacterCreation", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not found"])
+        }
+        
+        print("DEBUG: Uploading \(images.count) selected images")
+        
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            for (index, imageUrl) in images.enumerated() {
                 group.addTask {
                     // Download image data
                     guard let url = URL(string: imageUrl) else {
@@ -259,7 +405,8 @@ import FirebaseFirestore
                     }
                     
                     // Generate unique filename
-                    let filename = "\(UUID().uuidString).jpg"
+                    let timestamp = Int(Date().timeIntervalSince1970)
+                    let filename = "\(timestamp)_\(index).jpg"
                     let path = "characters/\(userId)/generated_images/\(filename)"
                     let storageRef = self.storage.reference().child(path)
                     
@@ -268,9 +415,15 @@ import FirebaseFirestore
                     // Create metadata
                     let metadata = StorageMetadata()
                     metadata.contentType = "image/jpeg"
+                    metadata.customMetadata = [
+                        "userId": userId,
+                        "imageIndex": String(index),
+                        "originalUrl": imageUrl,
+                        "timestamp": String(timestamp)
+                    ]
                     
-                    // Upload to our storage with metadata
-                    _ = try await storageRef.putData(data, metadata: metadata)
+                    // Upload to storage
+                    _ = try await storageRef.putDataAsync(data, metadata: metadata)
                     let downloadUrl = try await storageRef.downloadURL()
                     
                     print("DEBUG: Successfully uploaded image, got URL: \(downloadUrl.absoluteString)")
@@ -282,49 +435,7 @@ import FirebaseFirestore
             for try await url in group {
                 urls.append(url)
             }
-            return urls
-        }
-        
-        print("DEBUG: Successfully uploaded \(uploadedUrls.count) images")
-        
-        do {
-            // First try to find a generating character
-            let generatingSnapshot = try await db.collection("characters")
-                .whereField("userId", isEqualTo: userId)
-                .whereField("status", isEqualTo: Character.GenerationStatus.generating.rawValue)
-                .order(by: "createdAt", descending: true)
-                .limit(to: 1)
-                .getDocuments()
-            
-            if let characterDoc = generatingSnapshot.documents.first {
-                print("DEBUG: Found generating character document: \(characterDoc.documentID)")
-                try await characterDoc.reference.updateData([
-                    "generatedImages": uploadedUrls,
-                    "status": Character.GenerationStatus.completed.rawValue,
-                    "updatedAt": Date()
-                ])
-                return
-            }
-            
-            // If no generating character found, create a new one
-            print("DEBUG: No generating character found, creating new one")
-            let newCharacter = Character(
-                userId: userId,
-                name: name,
-                characterDescription: characterDescription,
-                stylePrompt: stylePrompt,
-                generatedImages: uploadedUrls
-            )
-            
-            try await db.collection("characters")
-                .document(newCharacter.id)
-                .setData(newCharacter.firestoreData)
-            
-            print("DEBUG: Successfully created new character document")
-            
-        } catch {
-            print("DEBUG: Error updating Firestore: \(error)")
-            throw error
+            return urls.sorted()
         }
     }
     
@@ -333,6 +444,8 @@ import FirebaseFirestore
         characterDescription = ""
         stylePrompt = ""
         referenceImages = []
+        temporaryGeneratedUrls = []
         state = .editing
+        isRefining = false
     }
 } 

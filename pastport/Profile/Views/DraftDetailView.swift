@@ -12,6 +12,8 @@ struct DraftDetailView: View {
     @State private var references: [ReferenceText] = []
     @State private var errorMessage: String?
     @State private var draft: Draft
+    @State private var showingVideoGeneration = false
+    @State private var isGeneratingVideo = false
     let onDraftDeleted: (() -> Void)?
     
     init(draft: Draft, onDraftDeleted: (() -> Void)? = nil) {
@@ -234,6 +236,64 @@ struct DraftDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            
+            // AI Actions Section
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("AI Actions", systemImage: "sparkles")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    VStack(spacing: 12) {
+                        Button {
+                            handleVideoGeneration()
+                        } label: {
+                            HStack {
+                                Image(systemName: "video.badge.plus")
+                                Text("Create AI Video")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.blue)
+                            )
+                            .foregroundStyle(.white)
+                        }
+                        .disabled(isGeneratingVideo)
+                        
+                        Button {
+                            handleScriptGeneration()
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.text.below.ecg")
+                                Text("Create Script")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemGray5))
+                            )
+                            .foregroundStyle(.primary)
+                        }
+                        .disabled(isGeneratingVideo)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.systemBackground))
+                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                    )
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            } header: {
+                Text("AI Features")
+                    .textCase(.uppercase)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
         .listStyle(.insetGrouped)
         .navigationBarTitleDisplayMode(.inline)
@@ -270,6 +330,11 @@ struct DraftDetailView: View {
         .sheet(isPresented: $showEditSheet) {
             NavigationStack {
                 DraftEditView(draft: $draft)
+            }
+        }
+        .sheet(isPresented: $showingVideoGeneration) {
+            NavigationStack {
+                VideoGenerationView(draft: draft)
             }
         }
         .task {
@@ -339,6 +404,14 @@ struct DraftDetailView: View {
             isDeleting = false
             errorMessage = "Failed to delete draft: \(error.localizedDescription)"
         }
+    }
+    
+    private func handleVideoGeneration() {
+        showingVideoGeneration = true
+    }
+    
+    private func handleScriptGeneration() {
+        // TODO: Implement script generation
     }
 }
 

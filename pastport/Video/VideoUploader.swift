@@ -67,7 +67,9 @@ final class VideoUploader {
             "timestamp": String(timestamp),
             "originalFilename": url.lastPathComponent,
             "category": categorization.category.rawValue,
-            "subcategory": categorization.subcategory.rawValue
+            "subcategory": categorization.subcategory.rawValue,
+            "type": url.lastPathComponent.contains("_ai") ? "ai_generated" : "user_generated",
+            "fileSize": String(fileSize)
         ]
         
         // Upload video
@@ -112,7 +114,7 @@ final class VideoUploader {
                             let downloadURL = try await videoRef.downloadURL()
                             print("DEBUG: Got download URL: \(downloadURL.absoluteString)")
                             
-                            // Create post document
+                            // Create post document with AI-specific metadata
                             let post = [
                                 "userId": uid,
                                 "caption": caption,
@@ -124,7 +126,17 @@ final class VideoUploader {
                                 "shares": 0,
                                 "comments": 0,
                                 "category": categorization.category.rawValue,
-                                "subcategory": categorization.subcategory.rawValue
+                                "subcategory": categorization.subcategory.rawValue,
+                                "type": url.lastPathComponent.contains("_ai") ? "ai_generated" : "user_generated",
+                                "status": "active",
+                                "metadata": [
+                                    "fileSize": String(fileSize),
+                                    "duration": url.lastPathComponent.contains("_ai") ? "5" : "",
+                                    "resolution": url.lastPathComponent.contains("_ai") ? "1080p" : "",
+                                    "fps": url.lastPathComponent.contains("_ai") ? "30" : "",
+                                    "isCompressed": "true",
+                                    "uploadTimestamp": String(timestamp)
+                                ]
                             ] as [String : Any]
                             
                             // Add to main posts collection
@@ -146,14 +158,18 @@ final class VideoUploader {
                 
                 // Handle failure
                 let failureHandle = task.observe(.failure) { snapshot in
-                    print("DEBUG: Upload failed: \(snapshot.error?.localizedDescription ?? "Unknown error")")
+                    print("DEBUG: Upload failed")
                     task.removeAllObservers()
-                    continuation.resume(throwing: VideoUploadError.uploadFailed(snapshot.error ?? NSError()))
+                    if let error = snapshot.error {
+                        continuation.resume(throwing: VideoUploadError.uploadFailed(error))
+                    } else {
+                        continuation.resume(throwing: VideoUploadError.uploadFailed(NSError(domain: "VideoUploader", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown upload error"])))
+                    }
                 }
             }
         } catch {
-            print("DEBUG: Upload failed with error: \(error)")
-            throw VideoUploadError.uploadFailed(error)
+            print("DEBUG: Failed to read video data: \(error)")
+            throw VideoUploadError.invalidVideoData
         }
     }
     

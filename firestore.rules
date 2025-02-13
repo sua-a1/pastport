@@ -11,6 +11,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    function hasRequiredCharacterFields() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['id', 'userId', 'name', 'description', 'stylePrompt', 'status']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 &&
+             data.description is string && data.description.size() > 0 &&
+             data.stylePrompt is string && data.stylePrompt.size() > 0 &&
+             data.status in ['not_started', 'generating', 'completed', 'failed'] &&
+             data.referenceImages is list &&
+             data.generatedImages is list;
+    }
+    
     function hasValidCharacterData() {
       let data = request.resource.data;
       return data.keys().hasAll(['id', 'userId', 'name', 'description', 'stylePrompt', 'referenceImages', 'generatedImages', 'status', 'createdAt', 'updatedAt']) &&
@@ -35,21 +47,15 @@ service cloud.firestore {
     
     // Characters collection rules
     match /characters/{characterId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.isPublic == true
-      );
+      allow read: if isAuthenticated();
       
-      allow create: if isAuthenticated() &&
-                      hasValidCharacterData();
+      allow create: if isAuthenticated() && hasRequiredCharacterFields();
       
-      allow update: if isAuthenticated() &&
-                      isOwner(resource.data.userId) &&
-                      hasValidCharacterData() &&
-                      request.resource.data.userId == resource.data.userId;
+      allow update: if isAuthenticated() && 
+                      request.resource.data.userId == resource.data.userId &&
+                      request.auth.uid == resource.data.userId;
       
-      allow delete: if isAuthenticated() &&
-                      isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
     
     // Draft validation functions

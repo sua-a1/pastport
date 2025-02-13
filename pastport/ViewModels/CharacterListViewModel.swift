@@ -1,66 +1,124 @@
 import SwiftUI
 import FirebaseFirestore
-import SwiftData
+import FirebaseStorage
 
 @Observable final class CharacterListViewModel {
     // MARK: - Properties
-    private let userId: String
-    private let db = Firestore.firestore()
     var characters: [Character] = []
     var isLoading = false
+    private let db = Firestore.firestore()
+    private let storage = Storage.storage()
+    private let userId: String
     var errorMessage: String?
     
     // MARK: - Initialization
     init(userId: String) {
         self.userId = userId
+        print("DEBUG: CharacterListViewModel initialized for user: \(userId)")
         Task {
-            await fetchCharacters()
+            await loadCharacters()
         }
     }
     
     // MARK: - Methods
-    @MainActor
-    func fetchCharacters() async {
+    func loadCharacters() async {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
         
         do {
-            // Fetch from Firestore
+            print("DEBUG: Starting character load for user: \(userId)")
+            
+            // Query characters for the current user, ordered by creation date
             let snapshot = try await db.collection("characters")
                 .whereField("userId", isEqualTo: userId)
+                .order(by: "createdAt", descending: true)
                 .getDocuments()
             
-            // Parse documents
-            characters = snapshot.documents.compactMap { document in
-                try? document.data(as: Character.self)
+            print("DEBUG: Found \(snapshot.documents.count) characters")
+            
+            let loadedCharacters = snapshot.documents.compactMap { document -> Character? in
+                do {
+                    let data = document.data()
+                    // Convert Timestamp to Date
+                    var mutableData = data
+                    if let createdTimestamp = data["createdAt"] as? Timestamp {
+                        mutableData["createdAt"] = createdTimestamp.dateValue()
+                    }
+                    if let updatedTimestamp = data["updatedAt"] as? Timestamp {
+                        mutableData["updatedAt"] = updatedTimestamp.dateValue()
+                    }
+                    
+                    return Character(id: document.documentID, data: mutableData)
+                } catch {
+                    print("DEBUG: Failed to parse character document: \(error)")
+                    return nil
+                }
             }
             
-            // Sort by creation date
-            characters.sort { $0.createdAt > $1.createdAt }
+            print("DEBUG: Successfully parsed \(loadedCharacters.count) characters")
             
+            await MainActor.run {
+                self.characters = loadedCharacters
+            }
         } catch {
-            print("DEBUG: Failed to fetch characters: \(error)")
+            print("DEBUG: Failed to load characters: \(error)")
             errorMessage = "Failed to load characters. Please try again."
         }
-        
-        isLoading = false
     }
     
     func deleteCharacter(_ character: Character) async {
         do {
-            // Delete from Firestore
+            print("DEBUG: Starting deletion of character: \(character.id)")
+            
+            // Delete character document from Firestore
             try await db.collection("characters").document(character.id).delete()
             
             // Delete associated images from Storage
-            // TODO: Implement cleanup of character images
+            let storageRef = storage.reference()
+            
+            // Delete reference images
+            for refImage in character.referenceImages {
+                if let imagePath = extractPathFromUrl(refImage.url) {
+                    try? await storageRef.child(imagePath).delete()
+                }
+            }
+            
+            // Delete generated images
+            for imageUrl in character.generatedImages {
+                if let imagePath = extractPathFromUrl(imageUrl) {
+                    try? await storageRef.child(imagePath).delete()
+                }
+            }
             
             // Update local state
             await MainActor.run {
                 characters.removeAll { $0.id == character.id }
             }
+            
+            print("DEBUG: Successfully deleted character and associated images")
         } catch {
             print("DEBUG: Failed to delete character: \(error)")
             errorMessage = "Failed to delete character. Please try again."
         }
+    }
+    
+    private func extractPathFromUrl(_ urlString: String) -> String? {
+        guard let url = URL(string: urlString),
+              let host = url.host,
+              host.contains("firebasestorage.googleapis.com") else {
+            return nil
+        }
+        
+        // Extract the path after /o/
+        if let range = urlString.range(of: "/o/"),
+           let endRange = urlString.range(of: "?") {
+            let startIndex = range.upperBound
+            let endIndex = endRange.lowerBound
+            let path = String(urlString[startIndex..<endIndex])
+                .removingPercentEncoding ?? ""
+            return path
+        }
+        return nil
     }
 } 

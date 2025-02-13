@@ -12,6 +12,7 @@ final class Character: Decodable {
     var stylePrompt: String
     var generatedImages: [String]
     var referenceImages: [ReferenceImage]
+    var status: GenerationStatus
     var createdAt: Date
     var updatedAt: Date
     
@@ -23,7 +24,7 @@ final class Character: Decodable {
     
     // MARK: - Decodable
     enum CodingKeys: String, CodingKey {
-        case id, userId, name, stylePrompt, generatedImages, referenceImages, createdAt, updatedAt
+        case id, userId, name, stylePrompt, generatedImages, referenceImages, status, createdAt, updatedAt
         case characterDescription = "description"
     }
     
@@ -36,6 +37,7 @@ final class Character: Decodable {
         stylePrompt = try container.decode(String.self, forKey: .stylePrompt)
         generatedImages = try container.decode([String].self, forKey: .generatedImages)
         referenceImages = try container.decode([ReferenceImage].self, forKey: .referenceImages)
+        status = try container.decode(GenerationStatus.self, forKey: .status)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
@@ -49,6 +51,7 @@ final class Character: Decodable {
         stylePrompt: String,
         generatedImages: [String] = [],
         referenceImages: [ReferenceImage] = [],
+        status: GenerationStatus = .notStarted,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -59,13 +62,14 @@ final class Character: Decodable {
         self.stylePrompt = stylePrompt
         self.generatedImages = generatedImages
         self.referenceImages = referenceImages
+        self.status = status
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
     
     // MARK: - Firestore Conversion
     var firestoreData: [String: Any] {
-        [
+        var data: [String: Any] = [
             "id": id,
             "userId": userId,
             "name": name,
@@ -77,9 +81,19 @@ final class Character: Decodable {
                 "weight": $0.weight
             ] },
             "generatedImages": generatedImages,
-            "createdAt": createdAt,
-            "updatedAt": updatedAt
+            "status": status.rawValue
         ]
+        
+        // Only set timestamps on creation
+        if createdAt == updatedAt {
+            data["createdAt"] = FieldValue.serverTimestamp()
+            data["updatedAt"] = FieldValue.serverTimestamp()
+        } else {
+            // For updates, only set updatedAt
+            data["updatedAt"] = FieldValue.serverTimestamp()
+        }
+        
+        return data
     }
 }
 
@@ -120,6 +134,7 @@ extension Character {
             let stylePrompt = data["stylePrompt"] as? String,
             let referenceImagesData = data["referenceImages"] as? [[String: Any]],
             let generatedImages = data["generatedImages"] as? [String],
+            let status = GenerationStatus(rawValue: data["status"] as? String ?? "not_started"),
             let createdAt = data["createdAt"] as? Date,
             let updatedAt = data["updatedAt"] as? Date
         else { return nil }
@@ -142,6 +157,7 @@ extension Character {
             stylePrompt: stylePrompt,
             generatedImages: generatedImages,
             referenceImages: referenceImages,
+            status: status,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

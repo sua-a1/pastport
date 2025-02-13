@@ -1,0 +1,124 @@
+private func migrateImageIfNeeded(imageUrl: String, index: Int) async throws -> String {
+    print("[DEBUG] CharacterDetailView: migrateImageIfNeeded for image \(index): \(imageUrl)")
+    let storage = Storage.storage()
+    let db = Firestore.firestore()
+    let characterId = character.id
+
+    guard let userId = Auth.auth().currentUser?.uid else {
+        throw NSError(domain: "CharacterDetail", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+    }
+
+    // Check if we have already migrated this URL
+    if let migratedUrl = migratedUrls[imageUrl] {
+        print("[DEBUG] CharacterDetailView: Using previously migrated URL: \(migratedUrl)")
+        return migratedUrl
+    }
+
+    // Check if the URL is a Firebase Storage URL by looking for the encoded path
+    if let encodedPath = imageUrl
+        .split(separator: "/o/").last?
+        .split(separator: "?").first?
+        .removingPercentEncoding {
+
+        print("[DEBUG] CharacterDetailView: Found Firebase path: \(encodedPath)")
+
+        // Check if it's using the old path structure
+        if encodedPath.starts(with: "files/characters/generated-images/") {
+            print("[DEBUG] CharacterDetailView: Detected old path structure, will migrate")
+
+            // Download the image from old path
+            let oldRef = storage.reference().child(encodedPath)
+            let data = try await oldRef.data(maxSize: 5 * 1024 * 1024)
+
+            // Upload to new path
+            let newPath = "characters/\(userId)/generated_images/\(characterId)_\(index).jpg"
+            print("[DEBUG] CharacterDetailView: Migrating to new path: \(newPath)")
+
+            let newRef = storage.reference().child(newPath)
+            let metadata = StorageMetadata()
+            metadata.contentType = "image/jpeg"
+            metadata.customMetadata = [
+                "characterId": characterId,
+                "imageIndex": String(index),
+                "originalUrl": imageUrl,
+                "migratedFrom": encodedPath
+            ]
+
+            _ = try await newRef.putData(data, metadata: metadata) // Correct: putData after download
+            let newUrl = try await newRef.downloadURL()
+
+            // Try to delete the old file (ignore errors)
+            try? await oldRef.delete()
+
+            print("[DEBUG] CharacterDetailView: Successfully migrated image \(index)")
+
+            // Store the migrated URL
+            await MainActor.run {
+                migratedUrls[imageUrl] = newUrl.absoluteString
+            }
+
+            return newUrl.absoluteString
+        } else if encodedPath.starts(with: "characters/\(userId)/generated_images/") {
+            // Already using new path structure, just refresh the URL
+            let ref = storage.reference().child(encodedPath)
+            let freshUrl = try await ref.downloadURL()
+            print("[DEBUG] CharacterDetailView: Got fresh URL for existing image \(index)")
+
+            // Store the refreshed URL (though it might be the same)
+            await MainActor.run {
+                migratedUrls[imageUrl] = freshUrl.absoluteString
+            }
+
+            return freshUrl.absoluteString
+        }
+    }
+
+    // For Luma CDN URLs or if Firebase URL handling failed
+    if imageUrl.contains("cdn-luma.com") || !imageUrl.contains("firebasestorage.googleapis.com") {
+        print("[DEBUG] CharacterDetailView: Processing new upload for image \(index)")
+
+        // Download the image *FIRST*
+        guard let url = URL(string: imageUrl) else {
+            throw NSError(domain: "CharacterDetail", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid image URL"])
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: url) // Await the download
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200,
+              !data.isEmpty else {
+            let errorDescription = "Failed to download image. Status code: \( (response as? HTTPURLResponse)?.statusCode ?? -1), Data empty: \(data.isEmpty)"
+            throw NSError(domain: "CharacterDetail", code: -1, userInfo: [NSLocalizedDescriptionKey: errorDescription])
+        }
+
+
+        // Use the new path structure
+        let path = "characters/\(userId)/generated_images/\(characterId)_\(index).jpg"
+        print("[DEBUG] CharacterDetailView: Will upload to path: \(path)")
+
+        let storageRef = storage.reference().child(path)
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        metadata.customMetadata = [
+            "characterId": characterId,
+            "imageIndex": String(index),
+            "originalUrl": imageUrl
+        ]
+
+        // *NOW* upload the data
+        _ = try await storageRef.putData(data, metadata: metadata)  // Correct: putData *after* download
+        let downloadUrl = try await storageRef.downloadURL()
+        print("[DEBUG] CharacterDetailView: Successfully uploaded image \(index)")
+
+        // Store the migrated URL
+        await MainActor.run {
+            migratedUrls[imageUrl] = downloadUrl.absoluteString
+        }
+
+        return downloadUrl.absoluteString
+    }
+
+    // If none of the above conditions are met, return the original URL
+    print("[DEBUG] CharacterDetailView: Returning original URL: \(imageUrl)")
+    return imageUrl
+} 

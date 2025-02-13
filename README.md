@@ -92,8 +92,7 @@ Pastport is a TikTok-like platform that enables creators to engage in historical
 - User-uploaded video functionality
 - Text-based draft system
 - Categorization
-- Character profiles
-- Engagement features
+- Character profiles 
 
 #### Week 2 (Upcoming)
 - AI-powered enhancements

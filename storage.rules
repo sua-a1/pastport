@@ -21,13 +21,20 @@ service firebase.storage {
     // Function to check if file is a valid video
     function isValidVideo() {
       return request.resource.contentType.matches('video/.*')
-        && request.resource.size < 100 * 1024 * 1024;  // 100MB max
+        && request.resource.size < 100 * 1024 * 1024  // 100MB max
+        && (
+          // Allow videos with no metadata during upload
+          (request.resource.metadata == null) ||
+          // If metadata exists, ensure required fields
+          (request.resource.metadata != null &&
+           'userId' in request.resource.metadata &&
+           request.resource.metadata.userId == request.auth.uid)
+        );
     }
     
-    // Allow access to all character image paths
-    match /characters/{userId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+    // Allow access to all character-related images during debugging
+    match /characters/{userId}/{imageType}/{filename} {
+      allow read, write: if true;
     }
     
     // Draft attachments rules

@@ -12,43 +12,45 @@ struct CharacterListView: View {
             Color.pastportBackground
                 .ignoresSafeArea()
             
-            ScrollView {
-                if viewModel.isLoading {
-                    ProgressView("Loading characters...")
-                        .padding()
-                } else if viewModel.characters.isEmpty {
-                    ContentUnavailableView(
-                        "No Characters Yet",
-                        systemImage: "person.fill.questionmark",
-                        description: Text("Create your first character to bring your stories to life!")
-                    )
+            if viewModel.isLoading {
+                ProgressView("Loading characters...")
                     .padding()
-                } else {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 24),
-                            GridItem(.flexible(), spacing: 24)
-                        ],
-                        spacing: 24
-                    ) {
-                        ForEach(viewModel.characters) { character in
-                            CharacterCell(character: character)
-                                .onTapGesture {
-                                    selectedCharacter = character
-                                    showingCharacterDetail = true
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        characterToDelete = character
-                                        showingDeleteConfirmation = true
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+            } else {
+                ScrollView {
+                    if viewModel.characters.isEmpty {
+                        ContentUnavailableView(
+                            "No Characters Yet",
+                            systemImage: "person.fill.questionmark",
+                            description: Text("Create your first character to bring your stories to life!")
+                        )
+                        .padding()
+                    } else {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 16),
+                                GridItem(.flexible(), spacing: 16)
+                            ],
+                            spacing: 16
+                        ) {
+                            ForEach(viewModel.characters) { character in
+                                CharacterCell(character: character)
+                                    .onTapGesture {
+                                        selectedCharacter = character
+                                        showingCharacterDetail = true
                                     }
-                                }
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            characterToDelete = character
+                                            showingDeleteConfirmation = true
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
                 }
             }
         }
@@ -69,6 +71,9 @@ struct CharacterListView: View {
                 CharacterDetailView(character: character)
             }
         }
+        .task {
+            await viewModel.loadCharacters()
+        }
     }
 }
 
@@ -78,17 +83,20 @@ private struct CharacterCell: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Character Image
+            // Character Image Container
             if let imageUrl = character.generatedImages.first {
                 AsyncImage(url: URL(string: imageUrl)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .frame(height: 200)
                 } placeholder: {
                     ProgressView()
+                        .frame(height: 200)
                 }
-                .frame(height: 200)
+                .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(.systemGray6))
@@ -114,7 +122,6 @@ private struct CharacterCell: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 12)
         }
-        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#E4E4E4"))

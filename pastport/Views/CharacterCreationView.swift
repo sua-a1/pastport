@@ -14,8 +14,8 @@ struct CharacterCreationView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 32) {
+            ScrollView(.vertical) {
+                VStack(spacing: 24) {
                     // Header Section
                     VStack(spacing: 8) {
                         Text("Create Your Character")
@@ -389,6 +389,144 @@ private struct ReferenceImageCell: View {
     }
 }
 
+// MARK: - Generation Results Components
+private struct GeneratedImageGrid: View {
+    let urls: [String]
+    let selectedImages: Set<String>
+    let onImageTap: (String) -> Void
+    
+    var body: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ],
+            spacing: 16
+        ) {
+            ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                Button {
+                    onImageTap(url)
+                } label: {
+                    AsyncImage(url: URL(string: url)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(selectedImages.contains(url) ? Color.blue : Color.clear, lineWidth: 3)
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        if selectedImages.contains(url) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.blue)
+                                .padding(8)
+                        }
+                    }
+                }
+                .id(index)
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
+private struct ActionButtons: View {
+    let selectedImages: Set<String>
+    let isRegenerating: Bool
+    let viewModel: CharacterCreationViewModel
+    let onRefine: () -> Void
+    let onRegenerate: () -> Void
+    let onDismiss: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Binding var errorMessage: String
+    @Binding var showingCharacterRefinement: Bool
+    @State private var isSaving = false
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Save button
+            Button {
+                withAnimation {
+                    isSaving = true
+                }
+                Task {
+                    do {
+                        try await viewModel.saveNewCharacter(selectedImages: Array(selectedImages))
+                        withAnimation {
+                            isSaving = false
+                        }
+                        // Don't dismiss the entire flow
+                        showingCharacterRefinement = false
+                    } catch {
+                        print("DEBUG: Failed to save character: \(error)")
+                        errorMessage = error.localizedDescription
+                        withAnimation {
+                            isSaving = false
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    if isSaving {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Save Selected Images")
+                            .font(.headline)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(selectedImages.isEmpty || viewModel.state == .saving || isSaving)
+            .opacity((selectedImages.isEmpty || isSaving) ? 0.5 : 1.0)
+            
+            // Refine Button
+            Button(action: onRefine) {
+                HStack {
+                    Image(systemName: "wand.and.stars")
+                    Text("Refine Character")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.purple)
+                )
+                .foregroundColor(.white)
+            }
+            .disabled(selectedImages.isEmpty || isSaving)
+            .opacity((selectedImages.isEmpty || isSaving) ? 0.5 : 1.0)
+            
+            // Regenerate Button
+            Button(action: onRegenerate) {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Generate New Variations")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray4))
+                )
+                .foregroundColor(.primary)
+            }
+            .disabled(isSaving)
+            .opacity(isSaving ? 0.5 : 1.0)
+        }
+        .padding(.horizontal)
+        .disabled(isRegenerating)
+    }
+}
+
 private struct GenerationResultsView: View {
     let urls: [String]
     let viewModel: CharacterCreationViewModel
@@ -407,161 +545,109 @@ private struct GenerationResultsView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text("Your character has been generated!")
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .padding(.top)
-                    
-                    // Selection Instructions
-                    Text("Select up to 2 images to save or refine your character")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    // Image Grid
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 16),
-                            GridItem(.flexible(), spacing: 16)
-                        ],
-                        spacing: 16
-                    ) {
-                        ForEach(Array(displayUrls.enumerated()), id: \.offset) { index, url in
-                            Button {
-                                toggleImageSelection(url)
-                            } label: {
-                                AsyncImage(url: URL(string: url)) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    ProgressView()
-                                }
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(selectedImages.contains(url) ? Color.blue : Color.clear, lineWidth: 3)
-                                )
-                                .overlay(alignment: .topTrailing) {
-                                    if selectedImages.contains(url) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.title2)
-                                            .foregroundStyle(.blue)
-                                            .padding(8)
-                                    }
-                                }
-                            }
-                            .id(index)
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    if isRegenerating {
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                            Text("Generating new variations...")
+            ZStack {
+                Color.pastportBackground
+                    .ignoresSafeArea()
+                
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 24) {
+                        // Header
+                        VStack(spacing: 8) {
+                            Text("Your character has been generated!")
                                 .font(.headline)
-                            Text("This may take a few moments")
+                                .multilineTextAlignment(.center)
+                                .padding(.top)
+                            
+                            Text("Select up to 2 images to save or refine your character")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                    } else {
-                        VStack(spacing: 16) {
-                            // Save Button
-                            Button(action: saveCharacter) {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.down")
-                                    Text("Save Selected Images")
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue)
-                                )
-                                .foregroundColor(.white)
+                        
+                        // Image Grid
+                        GeneratedImageGrid(
+                            urls: displayUrls,
+                            selectedImages: selectedImages,
+                            onImageTap: toggleImageSelection
+                        )
+                        
+                        if isRegenerating {
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                Text("Generating new variations...")
+                                    .font(.headline)
+                                Text("This may take a few moments")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                            .disabled(selectedImages.isEmpty)
-                            
-                            // Refine Button
-                            Button {
-                                print("DEBUG: Refine button tapped with \(selectedImages.count) selected images")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        }
+                        
+                        // Action Buttons
+                        ActionButtons(
+                            selectedImages: selectedImages,
+                            isRegenerating: isRegenerating,
+                            viewModel: viewModel,
+                            onRefine: {
                                 if !selectedImages.isEmpty && selectedImages.count <= 2 {
-                                    print("DEBUG: Starting character refinement flow")
                                     showingCharacterRefinement = true
                                 }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "wand.and.stars")
-                                    Text("Refine Character")
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.purple)
-                                )
-                                .foregroundColor(.white)
-                            }
-                            .disabled(selectedImages.isEmpty)
-                            
-                            // Regenerate Button
-                            Button(action: regenerate) {
-                                HStack {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Generate New Variations")
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.systemGray4))
-                                )
-                                .foregroundColor(.primary)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .disabled(isRegenerating)
+                            },
+                            onRegenerate: regenerate,
+                            onDismiss: onDismiss,
+                            errorMessage: $errorMessage,
+                            showingCharacterRefinement: $showingCharacterRefinement
+                        )
                     }
+                    .padding(.bottom, 32)
+                }
+                .blur(radius: isRegenerating ? 3 : 0)
+                
+                if isRegenerating {
+                    LoadingOverlay(
+                        title: "Generating variations...",
+                        subtitle: "This may take a few moments"
+                    )
                 }
             }
             .navigationTitle("Results")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                        onDismiss()
-                    }
-                    .disabled(isRegenerating)
+            .navigationBarItems(trailing: 
+                Button("Done") {
+                    // Only dismiss when explicitly done
+                    dismiss()
+                    onDismiss()
                 }
-            }
+                .disabled(isRegenerating)
+            )
             .alert("Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(errorMessage)
             }
         }
-        .fullScreenCover(isPresented: $showingCharacterRefinement) {
+        .sheet(isPresented: $showingCharacterRefinement) {
             if !selectedImages.isEmpty {
-                NavigationStack {
-                    CharacterRefinementView(
-                        selectedImages: Array(selectedImages),
-                        viewModel: viewModel,
-                        onDismiss: {
-                            showingCharacterRefinement = false
-                            dismiss()
-                            onDismiss()
-                        }
-                    )
-                }
+                CharacterRefinementView(
+                    selectedImages: Array(selectedImages),
+                    viewModel: viewModel,
+                    character: viewModel.character,
+                    onDismiss: {
+                        showingCharacterRefinement = false
+                        onDismiss()
+                    }
+                )
+            }
+        }
+        .overlay {
+            if case .saving = viewModel.state {
+                LoadingOverlay(
+                    title: "Saving character...",
+                    subtitle: "Please wait while we save your character"
+                )
             }
         }
     }
@@ -574,54 +660,44 @@ private struct GenerationResultsView: View {
         }
     }
     
-    private func saveCharacter() {
-        Task {
-            do {
-                try await viewModel.saveCharacterImages(Array(selectedImages))
-                print("DEBUG: Successfully saved character images")
-            } catch {
-                // Log error but don't show to user
-                print("DEBUG: Error during save operation (suppressed): \(error)")
-            }
-            
-            // Add small delay for UI feedback
-            try? await Task.sleep(for: .milliseconds(500))
-        }
-    }
-    
     private func regenerate() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isRegenerating = true
+            selectedImages.removeAll()
+        }
+        
         Task {
-            await MainActor.run {
-                isRegenerating = true
-                selectedImages.removeAll()
-            }
-            
             do {
-                // If we're in refinement mode (have selected images), use reference generation
+                let urls: [String]
                 if !selectedImages.isEmpty {
-                    let urls = try await viewModel.generateCharacterWithReference(
+                    urls = try await viewModel.generateCharacterWithReference(
                         selectedImages: Array(selectedImages),
                         prompt: "Generate new variations of the same character"
                     )
                     await MainActor.run {
-                        regeneratedUrls = urls
-                        isRegenerating = false
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            regeneratedUrls = urls
+                            isRegenerating = false
+                        }
                     }
                 } else {
-                    // Otherwise use normal generation
                     try await viewModel.generateCharacter()
                     if case .completed(let newUrls) = viewModel.state {
                         await MainActor.run {
-                            regeneratedUrls = newUrls
-                            isRegenerating = false
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                regeneratedUrls = newUrls
+                                isRegenerating = false
+                            }
                         }
                     }
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                    isRegenerating = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        errorMessage = error.localizedDescription
+                        showingError = true
+                        isRegenerating = false
+                    }
                 }
             }
         }
@@ -631,6 +707,7 @@ private struct GenerationResultsView: View {
 private struct CharacterRefinementView: View {
     let selectedImages: [String]
     let viewModel: CharacterCreationViewModel
+    let character: Character?
     let onDismiss: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var prompt = ""
@@ -644,11 +721,10 @@ private struct CharacterRefinementView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background color
                 Color.pastportBackground
                     .ignoresSafeArea()
                 
-                ScrollView {
+                ScrollView(.vertical) {
                     VStack(spacing: 24) {
                         // Explanation Section
                         VStack(spacing: 8) {
@@ -751,60 +827,116 @@ private struct CharacterRefinementView: View {
                                 .padding(.horizontal)
                             }
                             
-                            // Save Button
-                            Button(action: saveRefinedCharacter) {
-                                if isSaving {
-                                    ProgressView()
-                                        .tint(.white)
-                                } else {
-                                    HStack {
-                                        Image(systemName: "square.and.arrow.down")
-                                        Text("Save Selected Variations")
+                            // Save button for refined images
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isSaving = true
+                                }
+                                
+                                Task {
+                                    do {
+                                        if let character = character {
+                                            print("DEBUG: Saving refined images to existing character: \(character.id)")
+                                            try await viewModel.saveRefinedCharacter(
+                                                characterId: character.id,
+                                                selectedImages: Array(selectedRefinedImages)
+                                            )
+                                        } else {
+                                            print("DEBUG: No existing character found, saving as new character")
+                                            try await viewModel.saveNewCharacter(
+                                                selectedImages: Array(selectedRefinedImages)
+                                            )
+                                        }
+                                        
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isSaving = false
+                                            }
+                                            dismiss()
+                                            onDismiss()
+                                        }
+                                    } catch {
+                                        print("DEBUG: Failed to save refined images: \(error)")
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                errorMessage = error.localizedDescription
+                                                showingError = true
+                                                isSaving = false
+                                            }
+                                        }
                                     }
                                 }
+                            } label: {
+                                HStack {
+                                    if isSaving {
+                                        ProgressView()
+                                            .tint(.white)
+                                    } else {
+                                        Text(character != nil ? "Add to Character" : "Save as New Character")
+                                            .font(.headline)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.blue)
-                            )
-                            .foregroundColor(.white)
+                            .buttonStyle(.borderedProminent)
                             .disabled(selectedRefinedImages.isEmpty || isSaving)
-                            .padding()
+                            .opacity((selectedRefinedImages.isEmpty || isSaving) ? 0.5 : 1.0)
+                            .padding(.horizontal)
                         }
                         
                         // Generate Button
                         if generatedUrls.isEmpty {
-                            Button(action: generateRefinedCharacter) {
-                                if isGenerating {
-                                    ProgressView()
-                                        .tint(.white)
-                                } else {
-                                    Text("Generate Variations")
+                            Button {
+                                generateRefinedCharacter()
+                            } label: {
+                                HStack {
+                                    if isGenerating {
+                                        ProgressView()
+                                            .tint(.white)
+                                    } else {
+                                        Text("Generate Variations")
+                                            .font(.headline)
+                                    }
                                 }
+                                .frame(maxWidth: .infinity)
+                                .padding()
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(Color.blue)
                             )
                             .foregroundColor(.white)
                             .disabled(prompt.isEmpty || isGenerating)
+                            .opacity((prompt.isEmpty || isGenerating) ? 0.5 : 1.0)
                             .padding(.horizontal)
                         }
                     }
+                    .padding(.bottom, 32)
+                }
+                .blur(radius: (isGenerating || isSaving) ? 3 : 0)
+                .disabled(isGenerating || isSaving)
+                
+                if isGenerating || isSaving {
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                    
+                    LoadingOverlay(
+                        title: isGenerating ? "Generating variations..." : "Saving images...",
+                        subtitle: isGenerating ? "This may take a few moments" : "Please wait while we save your refined character"
+                    )
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
                         dismiss()
                         onDismiss()
                     }
-                    .disabled(isSaving)
+                    .disabled(isSaving || isGenerating)
                 }
             }
             .alert("Error", isPresented: $showingError) {
@@ -812,6 +944,9 @@ private struct CharacterRefinementView: View {
             } message: {
                 Text(errorMessage)
             }
+            .interactiveDismissDisabled(isSaving || isGenerating)
+            .animation(.easeInOut(duration: 0.2), value: isGenerating)
+            .animation(.easeInOut(duration: 0.2), value: isSaving)
         }
     }
     
@@ -824,7 +959,9 @@ private struct CharacterRefinementView: View {
     }
     
     private func generateRefinedCharacter() {
-        isGenerating = true
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isGenerating = true
+        }
         
         Task {
             do {
@@ -833,38 +970,19 @@ private struct CharacterRefinementView: View {
                     prompt: prompt
                 )
                 await MainActor.run {
-                    generatedUrls = urls
-                    isGenerating = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        generatedUrls = urls
+                        isGenerating = false
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                    isGenerating = false
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        errorMessage = error.localizedDescription
+                        showingError = true
+                        isGenerating = false
+                    }
                 }
-            }
-        }
-    }
-    
-    private func saveRefinedCharacter() {
-        print("DEBUG: Starting save of refined character images")
-        isSaving = true
-        
-        Task {
-            do {
-                // Save the selected images
-                try await viewModel.saveCharacterImages(Array(selectedRefinedImages))
-                print("DEBUG: Successfully saved refined character images")
-            } catch {
-                // Log error but don't show to user
-                print("DEBUG: Error during save operation (suppressed): \(error)")
-            }
-            
-            // Add small delay for UI feedback
-            try? await Task.sleep(for: .milliseconds(500))
-            
-            await MainActor.run {
-                isSaving = false
             }
         }
     }
