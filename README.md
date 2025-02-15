@@ -3,7 +3,13 @@
 ## Implemented Features
 
 ## Implemented Features & User Stories
-
+### AI User Stories
+#### 1. AI-Generated Video Creation
+***User Story:***: "As a user, I want to be able to create AI-generated short-form clips based on the story drafts and resources I've uploaded."
+- Using Luma Ray 1.6
+#### 2. AI-Generated Character Creation
+***User Story***: "As a user, I want to be able to create AI characters for my stories using reference images and descriptions, and refine them until they're perfect."
+- Using Luma Photon 1
 ### 1. User Authentication & Profiles
 **User Story:** "As a user, I want to sign up and manage my profile so I can create and interact with content."
 
