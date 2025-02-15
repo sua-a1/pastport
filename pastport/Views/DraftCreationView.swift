@@ -100,7 +100,7 @@ struct DraftCreationView: View {
                 }
                 
                 // Compress image if needed
-                let maxSize: Int = 2 * 1024 * 1024 // 2MB
+                let maxSize: Int = 5 * 1024 * 1024 // 5MB max
                 var imageData = data
                 if data.count > maxSize {
                     let compression: CGFloat = CGFloat(maxSize) / CGFloat(data.count)
@@ -112,6 +112,13 @@ struct DraftCreationView: View {
                 
                 let metadata = StorageMetadata()
                 metadata.contentType = "image/jpeg"
+                metadata.customMetadata = [
+                    "userId": user.id,
+                    "timestamp": "\(Date().timeIntervalSince1970)",
+                    "originalFilename": mediaItem.item.itemIdentifier ?? ""
+                ]
+                
+                print("DEBUG: Uploading image with metadata: \(metadata.customMetadata ?? [:])")
                 
                 _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
                 let url = try await imageRef.downloadURL()

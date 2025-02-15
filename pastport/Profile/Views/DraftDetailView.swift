@@ -13,7 +13,10 @@ struct DraftDetailView: View {
     @State private var errorMessage: String?
     @State private var draft: Draft
     @State private var showingVideoGeneration = false
+    @State private var showingScriptGeneration = false
     @State private var isGeneratingVideo = false
+    @State private var showCameraView = false
+    @State private var selectedMainTab = 0
     let onDraftDeleted: (() -> Void)?
     
     init(draft: Draft, onDraftDeleted: (() -> Void)? = nil) {
@@ -23,277 +26,24 @@ struct DraftDetailView: View {
     
     var body: some View {
         List {
-            // First section with content
-            Section {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Title and Status
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Title", systemImage: "text.quote")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        HStack {
-                            Text(draft.title)
-                                .font(.title3)
-                            
-                            Spacer()
-                            
-                            StatusBadge(status: draft.status)
-                        }
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color(.systemBackground))
-                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        )
-                    }
-                    
-                    // Category and Type
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Category", systemImage: "tag.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        HStack(spacing: 12) {
-                            CategoryBadge(category: draft.category)
-                            if let subcategory = draft.subcategory {
-                                Text(subcategory.rawValue)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color(.systemGray6))
-                                    )
-                            }
-                        }
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color(.systemBackground))
-                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        )
-                    }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Story Content", systemImage: "doc.text.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        Text(draft.content)
-                            .font(.body)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(.systemBackground))
-                                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                            )
-                    }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            } header: {
-                Text("Story Details")
-                    .textCase(.uppercase)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            DraftDetailStorySection(viewModel: DraftDetailStorySection.ViewModel(draft: draft))
             
-            // Images Section
             if !draft.imageUrls.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Images", systemImage: "photo.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 12) {
-                                ForEach(draft.imageUrls, id: \.self) { url in
-                                    AsyncImage(url: URL(string: url)) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        ProgressView()
-                                    }
-                                    .frame(width: 160, height: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                } header: {
-                    Text("Media")
-                        .textCase(.uppercase)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                DraftMediaSection(imageUrls: draft.imageUrls, videoUrls: draft.videoUrls)
             }
             
-            // Videos Section
-            if !draft.videoUrls.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Videos", systemImage: "video.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 12) {
-                                ForEach(draft.videoUrls, id: \.self) { url in
-                                    DraftVideoThumbnailView(url: url)
-                                        .frame(width: 160, height: 180)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-            }
-            
-            // Reference Texts Section
             if !references.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Label("References", systemImage: "text.book.closed.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        ForEach(references) { reference in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(reference.title)
-                                    .font(.headline)
-                                
-                                Text(reference.content)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(3)
-                                
-                                if let source = reference.source {
-                                    Text("Source: \(source)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                
-                                Text("Last updated: \(reference.updatedAt.formatted(.relative(presentation: .named)))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(.systemBackground))
-                                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                            )
-                        }
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                } header: {
-                    Text("References")
-                        .textCase(.uppercase)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                ReferencesSection(references: references)
             }
             
-            // Metadata Section
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Details", systemImage: "info.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    
-                    VStack(spacing: 12) {
-                        MetadataRow(label: "Created", value: draft.createdAt.formatted(.relative(presentation: .named)))
-                        MetadataRow(label: "Last Modified", value: draft.updatedAt.formatted(.relative(presentation: .named)))
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemBackground))
-                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                    )
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            } header: {
-                Text("Information")
-                    .textCase(.uppercase)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            MetadataSection(draft: draft)
             
-            // AI Actions Section
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("AI Actions", systemImage: "sparkles")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    
-                    VStack(spacing: 12) {
-                        Button {
-                            handleVideoGeneration()
-                        } label: {
-                            HStack {
-                                Image(systemName: "video.badge.plus")
-                                Text("Create AI Video")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.blue)
-                            )
-                            .foregroundStyle(.white)
-                        }
-                        .disabled(isGeneratingVideo)
-                        
-                        Button {
-                            handleScriptGeneration()
-                        } label: {
-                            HStack {
-                                Image(systemName: "doc.text.below.ecg")
-                                Text("Create Script")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(.systemGray5))
-                            )
-                            .foregroundStyle(.primary)
-                        }
-                        .disabled(isGeneratingVideo)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(.systemBackground))
-                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                    )
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            } header: {
-                Text("AI Features")
-                    .textCase(.uppercase)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            AIFeaturesSection(
+                draft: draft,
+                isGeneratingVideo: $isGeneratingVideo,
+                showingVideoGeneration: $showingVideoGeneration,
+                showingScriptGeneration: $showingScriptGeneration
+            )
         }
         .listStyle(.insetGrouped)
         .navigationBarTitleDisplayMode(.inline)
@@ -337,45 +87,41 @@ struct DraftDetailView: View {
                 VideoGenerationView(draft: draft)
             }
         }
-        .task {
-            await fetchReferences()
-        }
-        .onChange(of: draft.referenceTextIds) { _ in
-            Task {
-                await fetchReferences()
+        .sheet(isPresented: $showingScriptGeneration) {
+            NavigationStack {
+                ScriptGenerationView(
+                    draftId: draft.id,
+                    userId: draft.userId,
+                    showCameraView: $showCameraView,
+                    selectedMainTab: $selectedMainTab
+                )
             }
+        }
+        .task {
+            await loadReferences()
         }
     }
     
-    private func fetchReferences() async {
+    private func loadReferences() async {
+        guard !draft.referenceTextIds.isEmpty else { return }
+        
         do {
-            print("DEBUG: Starting to fetch references for draft: \(draft.id)")
-            print("DEBUG: Reference IDs to fetch: \(draft.referenceTextIds)")
-            
             let db = Firestore.firestore()
-            references = []
+            var loadedReferences: [ReferenceText] = []
             
             for id in draft.referenceTextIds {
-                print("DEBUG: Fetching reference with ID: \(id)")
-                let docRef = db.collection("users")
+                if let reference = try await db.collection("users")
                     .document(draft.userId)
                     .collection("referenceTexts")
                     .document(id)
-                
-                let doc = try await docRef.getDocument()
-                print("DEBUG: Got document for reference \(id). Exists: \(doc.exists)")
-                if doc.exists {
-                    print("DEBUG: Document data: \(doc.data() ?? [:])")
-                    if let reference = ReferenceText.fromFirestore(doc.data() ?? [:], id: doc.documentID) {
-                        print("DEBUG: Successfully parsed reference: \(reference.title)")
-                        references.append(reference)
-                    } else {
-                        print("DEBUG: Failed to parse reference from data")
-                    }
+                    .getDocument()
+                    .data()
+                    .flatMap({ ReferenceText.fromFirestore($0, id: id) }) {
+                    loadedReferences.append(reference)
                 }
             }
             
-            print("DEBUG: Finished fetching references. Found: \(references.count)")
+            self.references = loadedReferences
         } catch {
             print("DEBUG: Failed to fetch references: \(error)")
             errorMessage = "Failed to fetch references: \(error.localizedDescription)"
@@ -387,17 +133,13 @@ struct DraftDetailView: View {
         
         do {
             let db = Firestore.firestore()
-            // Delete from Firestore
             try await db.collection("users")
                 .document(draft.userId)
                 .collection("drafts")
                 .document(draft.id)
                 .delete()
             
-            // Call the callback
             onDraftDeleted?()
-            
-            // Dismiss the view
             dismiss()
         } catch {
             print("DEBUG: Failed to delete draft: \(error)")
@@ -405,13 +147,264 @@ struct DraftDetailView: View {
             errorMessage = "Failed to delete draft: \(error.localizedDescription)"
         }
     }
-    
-    private func handleVideoGeneration() {
-        showingVideoGeneration = true
+}
+
+// MARK: - Story Details Section
+private struct DraftDetailStorySection: View {
+    @Observable final class ViewModel {
+        var draft: Draft
+        
+        init(draft: Draft) {
+            self.draft = draft
+        }
     }
     
-    private func handleScriptGeneration() {
-        // TODO: Implement script generation
+    let viewModel: ViewModel
+    
+    init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+    
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 24) {
+                // Title and Status
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Title", systemImage: "text.quote")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    HStack {
+                        Text(viewModel.draft.title)
+                            .font(.title3)
+                        
+                        Spacer()
+                        
+                        StatusBadge(status: viewModel.draft.status)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(.systemBackground))
+                    )
+                }
+                
+                // Category
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Category", systemImage: "folder")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    CategoryBadge(category: viewModel.draft.category)
+                }
+                
+                // Content
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Content", systemImage: "doc.text")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text(viewModel.draft.content)
+                        .font(.body)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(.systemBackground))
+                        )
+                }
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Story")
+                .textCase(.uppercase)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Video Thumbnail View
+private struct DraftVideoThumbnailView: View {
+    let url: String
+    @State private var player: AVPlayer?
+    
+    var body: some View {
+        ZStack {
+            if let player = player {
+                VideoPlayer(player: player)
+                    .onDisappear {
+                        player.pause()
+                    }
+            } else {
+                Color.gray
+                    .overlay {
+                        ProgressView()
+                    }
+            }
+        }
+        .task {
+            player = AVPlayer(url: URL(string: url)!)
+        }
+    }
+}
+
+// MARK: - Media Section
+private struct DraftMediaSection: View {
+    let imageUrls: [String]
+    let videoUrls: [String]
+    
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 24) {
+                if !imageUrls.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Images", systemImage: "photo.fill")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        ImageGridView(imageUrls: imageUrls)
+                    }
+                }
+                
+                if !videoUrls.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Videos", systemImage: "video.fill")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        VideoGridView(videoUrls: videoUrls)
+                    }
+                }
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Media")
+                .textCase(.uppercase)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - References Section
+private struct ReferencesSection: View {
+    let references: [ReferenceText]
+    
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Reference Texts", systemImage: "text.book.closed.fill")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                
+                ForEach(references) { reference in
+                    ReferenceTextView(reference: reference)
+                }
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("References")
+                .textCase(.uppercase)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Metadata Section
+private struct MetadataSection: View {
+    let draft: Draft
+    
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Details", systemImage: "info.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                
+                VStack(spacing: 12) {
+                    MetadataRow(label: "Created", value: draft.createdAt.formatted(.relative(presentation: .named)))
+                    MetadataRow(label: "Last Modified", value: draft.updatedAt.formatted(.relative(presentation: .named)))
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                )
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Information")
+                .textCase(.uppercase)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - AI Features Section
+private struct AIFeaturesSection: View {
+    let draft: Draft
+    @Binding var isGeneratingVideo: Bool
+    @Binding var showingVideoGeneration: Bool
+    @Binding var showingScriptGeneration: Bool
+    
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("AI Features", systemImage: "sparkles")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                
+                VStack(spacing: 12) {
+                    NavigationLink {
+                        ScriptGenerationView(
+                            draftId: draft.id,
+                            userId: draft.userId,
+                            showCameraView: .constant(false),
+                            selectedMainTab: .constant(0)
+                        )
+                    } label: {
+                        HStack {
+                            Image(systemName: "text.book.closed.fill")
+                            Text("Generate Script")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        VideoGenerationView(draft: draft)
+                    } label: {
+                        HStack {
+                            Image(systemName: "video.fill")
+                            Text("Generate Video")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                )
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("AI Features")
+                .textCase(.uppercase)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -489,80 +482,6 @@ private struct ImageGridView: View {
                 }
             }
             .padding(.horizontal)
-        }
-    }
-}
-
-private struct DraftVideoPlayerView: View {
-    let url: URL
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VideoPlayer(player: AVPlayer(url: url))
-                .ignoresSafeArea()
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Done") {
-                            dismiss()
-                        }
-                    }
-                }
-        }
-    }
-}
-
-private struct DraftVideoThumbnailView: View {
-    let url: String
-    @State private var thumbnail: Image?
-    @State private var showVideoPlayer = false
-    
-    var body: some View {
-        Button {
-            showVideoPlayer = true
-        } label: {
-            ZStack {
-                if let thumbnail = thumbnail {
-                    thumbnail
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(Color(.systemGray6))
-                        .overlay {
-                            ProgressView()
-                        }
-                }
-                
-                // Play button overlay
-                Image(systemName: "play.circle.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.white)
-                    .shadow(radius: 2)
-            }
-        }
-        .task {
-            await loadThumbnail()
-        }
-        .sheet(isPresented: $showVideoPlayer) {
-            if let videoURL = URL(string: url) {
-                DraftVideoPlayerView(url: videoURL)
-            }
-        }
-    }
-    
-    private func loadThumbnail() async {
-        guard let url = URL(string: url) else { return }
-        
-        do {
-            let asset = AVURLAsset(url: url)
-            let imageGenerator = AVAssetImageGenerator(asset: asset)
-            imageGenerator.appliesPreferredTrackTransform = true
-            
-            let cgImage = try await imageGenerator.image(at: .zero).image
-            thumbnail = Image(uiImage: UIImage(cgImage: cgImage))
-        } catch {
-            print("DEBUG: Failed to generate thumbnail: \(error)")
         }
     }
 }

@@ -12,23 +12,37 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Function to check if file is a valid image
-    function isValidImage() {
+    // Function to check if file is a valid image with 9:16 aspect ratio
+    function isValidKeyframeImage() {
       return request.resource.contentType.matches('image/.*')
-        && request.resource.size < 5 * 1024 * 1024;  // 5MB max
+        && request.resource.size < 5 * 1024 * 1024  // 5MB max
+        && (
+          // Validate image dimensions (9:16 aspect ratio)
+          request.resource.metadata != null
+          && 'width' in request.resource.metadata
+          && 'height' in request.resource.metadata
+          && request.resource.metadata.width is number
+          && request.resource.metadata.height is number
+          && (request.resource.metadata.height / request.resource.metadata.width) == (16.0 / 9.0)
+        );
     }
     
-    // Function to check if file is a valid video
+    // Function to check if file is a valid video with 9:16 aspect ratio
     function isValidVideo() {
       return request.resource.contentType.matches('video/.*')
         && request.resource.size < 100 * 1024 * 1024  // 100MB max
         && (
           // Allow videos with no metadata during upload
           (request.resource.metadata == null) ||
-          // If metadata exists, ensure required fields
-          (request.resource.metadata != null &&
-           'userId' in request.resource.metadata &&
-           request.resource.metadata.userId == request.auth.uid)
+          // If metadata exists, ensure required fields and 9:16 aspect ratio
+          (request.resource.metadata != null
+           && 'userId' in request.resource.metadata
+           && request.resource.metadata.userId == request.auth.uid
+           && (
+             !('width' in request.resource.metadata) ||
+             !('height' in request.resource.metadata) ||
+             (request.resource.metadata.height / request.resource.metadata.width) == (16.0 / 9.0)
+           ))
         );
     }
     
@@ -37,12 +51,20 @@ service firebase.storage {
       allow read, write: if true;
     }
     
+    // Function to check if file is a valid draft image
+    function isValidDraftImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024  // 5MB max
+        && request.resource.metadata != null
+        && request.resource.metadata.userId == request.auth.uid;
+    }
+    
     // Draft attachments rules
     match /drafts/{userId}/{draftId}/images/{imageId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow create, update: if isAuthenticated() 
                    && isOwner(userId)
-                   && isValidImage();
+                   && isValidDraftImage();
       allow delete: if isAuthenticated() && isOwner(userId);
     }
     
@@ -69,6 +91,43 @@ service firebase.storage {
                    && isValidVideo();
       allow delete: if isAuthenticated() 
                    && filename.matches(request.auth.uid + '_.*');
+    }
+    
+    // AI Script keyframe images
+    match /ai_scripts/{scriptId}/keyframes/{keyframeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+                   && isValidKeyframeImage()
+                   && request.resource.metadata != null
+                   && request.resource.metadata.userId == request.auth.uid
+                   && request.resource.metadata.scriptId == scriptId;
+      allow update: if isAuthenticated() 
+                   && isValidKeyframeImage()
+                   && request.resource.metadata != null
+                   && request.resource.metadata.userId == request.auth.uid
+                   && request.resource.metadata.scriptId == scriptId;
+      allow delete: if isAuthenticated() 
+                   && resource.metadata != null
+                   && resource.metadata.userId == request.auth.uid;
+    }
+    
+    // AI Script scene videos
+    match /videos/scripts/{scriptId}/scenes/{sceneId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+                   && isValidVideo()
+                   && request.resource.metadata != null
+                   && request.resource.metadata.userId == request.auth.uid
+                   && request.resource.metadata.scriptId == scriptId
+                   && request.resource.metadata.sceneIndex is string;
+      allow update: if isAuthenticated() 
+                   && isValidVideo()
+                   && request.resource.metadata != null
+                   && request.resource.metadata.userId == request.auth.uid
+                   && request.resource.metadata.scriptId == scriptId;
+      allow delete: if isAuthenticated() 
+                   && resource.metadata != null
+                   && resource.metadata.userId == request.auth.uid;
     }
     
     // Default deny

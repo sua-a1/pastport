@@ -2,6 +2,19 @@ import Foundation
 
 actor LumaAIService {
     // MARK: - Types
+    
+    /// Represents a scene in the story with its content and keyframes
+    struct StoryScene {
+        let content: String
+        let startKeyframe: SceneKeyframe
+        let endKeyframe: SceneKeyframe
+        
+        struct SceneKeyframe {
+            let prompt: String?
+            let url: String
+        }
+    }
+    
     struct ReferenceImage: Codable {
         let url: String
         let prompt: String?
@@ -15,6 +28,8 @@ actor LumaAIService {
         case invalidResponse
         case generationFailed(String)
         case videoGenerationFailed(String)
+        case requestFailed(String)
+        case missingVideoURL
         
         var errorDescription: String? {
             switch self {
@@ -30,6 +45,10 @@ actor LumaAIService {
                 return "Image generation failed: \(message)"
             case .videoGenerationFailed(let message):
                 return "Video generation failed: \(message)"
+            case .requestFailed(let message):
+                return "Request failed: \(message)"
+            case .missingVideoURL:
+                return "No video URL found in the response"
             }
         }
     }
@@ -38,8 +57,9 @@ actor LumaAIService {
         let prompt: String
         let image_ref: [ReferenceImage]?
         let character_ref: [String: CharacterIdentity]?
+        let style_ref: [ReferenceImage]?
         let model: String = "photon-1"
-        let aspect_ratio: String = "1:1"
+        let aspect_ratio: String = "9:16"
         let num_images: Int
         let guidance_scale: Double
         let steps: Int
@@ -48,6 +68,12 @@ actor LumaAIService {
     
     struct CharacterIdentity: Encodable {
         let images: [String]
+        let weight: Double
+        
+        init(images: [String], weight: Double = 0.7) {
+            self.images = images
+            self.weight = weight
+        }
     }
     
     struct GenerationResponse: Decodable {
@@ -76,23 +102,15 @@ actor LumaAIService {
         }
     }
     
-    struct VideoGenerationRequest: Encodable {
+    /// Request for video generation
+    struct VideoGenerationRequest: Codable {
         let prompt: String
-        let image_ref: [ReferenceImage]?
-        let character_ref: [String: CharacterIdentity]?
-        let model: String = "ray-2"
-        let aspect_ratio: String = "9:16"
-        let duration: String = "5s"
-        let fps: Int = 30
-        let resolution: String = "720p"
-        let guidance_scale: Double
-        let steps: Int
-        let negative_prompt: String = "blurry, low quality, distorted, deformed, poor animation, jerky motion, inconsistent style"
+        let keyframes: [String: Keyframe]
         let loop: Bool = false
-        let seed: Int? = Int.random(in: 1...1000000)
     }
     
-    struct VideoGenerationResponse: Decodable {
+    /// Response from video generation
+    private struct VideoGenerationResponse: Decodable {
         let id: String
         let state: String
         let error: String?
@@ -102,6 +120,19 @@ actor LumaAIService {
         struct Assets: Decodable {
             let video: String?
         }
+    }
+    
+    /// Keyframe for video generation
+    struct Keyframe: Codable {
+        let type: String
+        let url: String
+    }
+    
+    /// Error response from Luma API
+    struct ErrorResponse: Decodable {
+        let detail: String
+        let error_code: String?
+        let failure_reason: String?
     }
     
     // MARK: - Constants
@@ -131,7 +162,8 @@ actor LumaAIService {
     func generateImage(
         prompt: String,
         references: [ReferenceImage]? = nil,
-        characterReferences: [String]? = nil,
+        characterReferences: [String: CharacterIdentity]? = nil,
+        styleReferences: [ReferenceImage]? = nil,
         numOutputs: Int = 4,
         guidanceScale: Double = 12.0,
         steps: Int = 50
@@ -139,6 +171,7 @@ actor LumaAIService {
         print("DEBUG: Starting Luma AI image generation")
         print("DEBUG: Prompt: \(prompt)")
         print("DEBUG: Number of reference images: \(references?.count ?? 0)")
+        print("DEBUG: Number of character references: \(characterReferences?.count ?? 0)")
         
         guard !apiKey.isEmpty else {
             throw LumaAIError.missingAPIKey
@@ -149,14 +182,6 @@ actor LumaAIService {
             for ref in refs {
                 guard let url = URL(string: ref.url), url.scheme != nil else {
                     throw LumaAIError.generationFailed("Invalid reference image URL: \(ref.url)")
-                }
-            }
-        }
-        
-        if let charRefs = characterReferences {
-            for ref in charRefs {
-                guard let url = URL(string: ref), url.scheme != nil else {
-                    throw LumaAIError.generationFailed("Invalid character reference URL: \(ref)")
                 }
             }
         }
@@ -180,6 +205,7 @@ actor LumaAIService {
                 prompt: prompt,
                 references: adjustedReferences,
                 characterReferences: characterReferences,
+                styleReferences: styleReferences,
                 numOutputs: 1,
                 guidanceScale: min(guidanceScale, 15.0), // Cap guidance scale
                 steps: min(max(steps, 40), 60) // Ensure steps are between 40 and 60
@@ -204,81 +230,195 @@ actor LumaAIService {
         return finalImages
     }
     
-    // MARK: - Video Generation Methods
-    func generateVideo(
+    /// Generate a video using Luma AI
+    /// - Parameters:
+    ///   - prompt: The prompt describing the video
+    ///   - keyframes: Dictionary of keyframes with their URLs
+    /// - Returns: URL of the generated video
+    func generateVideo(prompt: String, keyframes: [String: Keyframe]) async throws -> URL {
+        print("DEBUG: Starting Luma AI video generation")
+        print("DEBUG: Keyframes: \(keyframes)")
+        
+        // Create request
+        let request = VideoGenerationRequest(
+            prompt: prompt,
+            keyframes: keyframes
+        )
+        
+        // Encode request
+        let encodedData = try encoder.encode(request)
+        
+        // Create URL request
+        var urlRequest = URLRequest(url: URL(string: Constants.baseUrl)!)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.httpBody = encodedData
+        
+        if let requestBody = String(data: encodedData, encoding: .utf8) {
+            print("DEBUG: Request body: \(requestBody)")
+        }
+        
+        // Send initial request
+        let (data, response) = try await session.data(for: urlRequest)
+        
+        if let responseBody = String(data: data, encoding: .utf8) {
+            print("DEBUG: Response body: \(responseBody)")
+        }
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw LumaAIError.requestFailed("Invalid response status code")
+        }
+        
+        // Decode initial response
+        let initialResponse = try decoder.decode(GenerationResponse.self, from: data)
+        let generationId = initialResponse.id
+        
+        // Poll for completion
+        let pollingUrl = URL(string: "\(Constants.baseUrl)/\(generationId)")!
+        var pollingRequest = URLRequest(url: pollingUrl)
+        pollingRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        
+        // Poll with exponential backoff
+        var retryCount = 0
+        let maxRetries = 30 // 5 minutes total with exponential backoff
+        
+        while retryCount < maxRetries {
+            print("DEBUG: Polling generation status (attempt \(retryCount + 1))")
+            
+            let (pollData, pollResponse) = try await session.data(for: pollingRequest)
+            
+            if let responseBody = String(data: pollData, encoding: .utf8) {
+                print("DEBUG: Poll response: \(responseBody)")
+            }
+            
+            guard let pollHttpResponse = pollResponse as? HTTPURLResponse,
+                  (200...299).contains(pollHttpResponse.statusCode) else {
+                throw LumaAIError.requestFailed("Invalid polling response status code")
+            }
+            
+            let generationStatus = try decoder.decode(GenerationResponse.self, from: pollData)
+            
+            switch generationStatus.state {
+            case "completed":
+                guard let videoUrl = generationStatus.assets?.video,
+                      let url = URL(string: videoUrl) else {
+                    throw LumaAIError.missingVideoURL
+                }
+                print("DEBUG: Video generation completed successfully")
+                return url
+                
+            case "failed":
+                let reason = generationStatus.failure_reason ?? "Unknown error"
+                print("DEBUG: Video generation failed: \(reason)")
+                throw LumaAIError.videoGenerationFailed(reason)
+                
+            case "queued", "processing", "dreaming":
+                print("DEBUG: Generation still in progress (status: \(generationStatus.state))")
+                retryCount += 1
+                try await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(retryCount))) * 1_000_000_000)
+                continue
+                
+            default:
+                throw LumaAIError.requestFailed("Unexpected generation state: \(generationStatus.state)")
+            }
+        }
+        
+        throw LumaAIError.requestFailed("Generation timed out after \(maxRetries) retries")
+    }
+    
+    // MARK: - Keyframe Generation Methods
+    
+    /// Generate a keyframe image for a scene
+    /// - Parameters:
+    ///   - prompt: The keyframe prompt
+    ///   - visualDescription: Additional visual description for context
+    ///   - references: Optional array of reference images with weights
+    ///   - characterReferences: Optional array of character reference URLs
+    ///   - styleReference: Optional style reference image URL for consistency
+    ///   - isEndKeyframe: Whether this is an end keyframe
+    ///   - scriptOverview: Optional script overview for context
+    /// - Returns: URL of the generated keyframe image
+    func generateKeyframe(
         prompt: String,
+        visualDescription: String,
         references: [ReferenceImage]? = nil,
         characterReferences: [String]? = nil,
-        guidanceScale: Double = 12.0,
-        steps: Int = 50
-    ) async throws -> URL {
-        print("DEBUG: Starting Luma AI video generation")
+        styleReference: String? = nil,
+        isEndKeyframe: Bool = false,
+        scriptOverview: String? = nil
+    ) async throws -> String {
+        print("DEBUG: Starting keyframe generation")
         print("DEBUG: Prompt: \(prompt)")
-        print("DEBUG: Number of reference images: \(references?.count ?? 0)")
+        print("DEBUG: Visual Description: \(visualDescription)")
+        print("DEBUG: Is End Keyframe: \(isEndKeyframe)")
+        print("DEBUG: Style Reference: \(styleReference ?? "none")")
+        print("DEBUG: Character references: \(characterReferences?.count ?? 0)")
+        print("DEBUG: Script Overview: \(scriptOverview ?? "none")")
         
-        guard !apiKey.isEmpty else {
-            throw LumaAIError.missingAPIKey
+        // Format character references
+        var formattedCharacterRefs: [String: CharacterIdentity]?
+        if let charRefs = characterReferences, !charRefs.isEmpty {
+            formattedCharacterRefs = ["identity0": CharacterIdentity(images: charRefs, weight: 0.5)]
+            print("DEBUG: Formatted character references with identity0 and weight 0.5: \(String(describing: formattedCharacterRefs))")
         }
-        
-        // Validate reference URLs
-        if let refs = references {
-            for ref in refs {
-                guard let url = URL(string: ref.url), url.scheme != nil else {
-                    throw LumaAIError.videoGenerationFailed("Invalid reference image URL: \(ref.url)")
-                }
-            }
-        }
-        
-        if let charRefs = characterReferences {
-            for ref in charRefs {
-                guard let url = URL(string: ref), url.scheme != nil else {
-                    throw LumaAIError.videoGenerationFailed("Invalid character reference URL: \(ref)")
-                }
-            }
-        }
-        
-        // Adjust reference weights to be more conservative
-        let adjustedReferences = references?.map { ref in
+
+        // Prepare references with adjusted weights based on keyframe type
+        var imageRefs = references?.map { ref in
             ReferenceImage(
                 url: ref.url,
                 prompt: ref.prompt,
-                weight: min(max(ref.weight, 0.3), 0.7) // Ensure weight is between 0.3 and 0.7
+                weight: 0.5 // Set consistent weight for all references
             )
         }
-        
-        // Create generation
-        let generationId = try await createVideoGeneration(
-            prompt: prompt,
-            references: adjustedReferences,
-            characterReferences: characterReferences,
-            guidanceScale: min(guidanceScale, 15.0), // Cap guidance scale
-            steps: min(max(steps, 40), 60) // Ensure steps are between 40 and 60
-        )
-        
-        print("DEBUG: Video generation created with ID: \(generationId)")
-        
-        // Poll for completion and get video URL
-        let videoUrl = try await pollVideoGeneration(id: generationId)
-        print("DEBUG: Video generation completed with URL: \(videoUrl)")
-        
-        return videoUrl
-    }
-    
-    // MARK: - Private Methods
-    private func createGeneration(
-        prompt: String,
-        references: [ReferenceImage]?,
-        characterReferences: [String]?,
-        numOutputs: Int,
-        guidanceScale: Double,
-        steps: Int
-    ) async throws -> String {
-        guard let url = URL(string: "\(Constants.baseUrl)/image") else {
-            throw LumaAIError.invalidResponse
+
+        // Add style reference if provided
+        var styleRefs: [ReferenceImage]?
+        if let styleUrl = styleReference {
+            styleRefs = [
+                ReferenceImage(
+                    url: styleUrl,
+                    prompt: "maintain consistent style and visual elements",
+                    weight: 0.5 // Set style reference weight to 0.5
+                )
+            ]
         }
         
-        // Enhance prompt with quality modifiers
+        // Build enhanced prompt for keyframe
         var enhancedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Add script overview context if available
+        if let overview = scriptOverview {
+            enhancedPrompt += "\n\nScript Context: \(overview)"
+        }
+        
+        enhancedPrompt += "\n\nVisual Context: \(visualDescription)"
+        
+        if isEndKeyframe {
+            enhancedPrompt += "\nThis is the end keyframe of the scene, showing the final state. "
+            enhancedPrompt += "Capture the essential outcome with absolute minimal complexity. "
+            enhancedPrompt += "Focus on the main subject, maintaining exact character appearance."
+        } else {
+            enhancedPrompt += "\nThis is the start keyframe of the scene, establishing the initial state. "
+            enhancedPrompt += "Show characters/objects in a clear, static pose. "
+            enhancedPrompt += "Keep the composition simple and focused on essential elements only."
+        }
+
+        enhancedPrompt += "\n\nTechnical Requirements:"
+        enhancedPrompt += "\n- Clear, sharp details with minimal artifacts"
+        enhancedPrompt += "\n- Simple, uncluttered backgrounds"
+        enhancedPrompt += "\n- Maximum 1-2 characters/elements"
+        enhancedPrompt += "\n- No floating or partial elements"
+        enhancedPrompt += "\n- Strong contrast between subjects and background"
+        enhancedPrompt += "\n- Centered composition"
+        enhancedPrompt += "\n- Essential elements only"
+        enhancedPrompt += "\n- Single clear action or pose"
+        enhancedPrompt += "\n- Exact character appearance"
+        enhancedPrompt += "\n- Static pose"
+        enhancedPrompt += "\n- Consistent lighting"
+        
+        // Add quality and dynamism modifiers
         if !enhancedPrompt.lowercased().contains("high quality") {
             enhancedPrompt += ", high quality"
         }
@@ -288,25 +428,166 @@ actor LumaAIService {
         if !enhancedPrompt.lowercased().contains("professional") {
             enhancedPrompt += ", professional"
         }
-        
-        // Add some randomness to the prompt to encourage variation
-        let randomSeed = Int.random(in: 1...1000000)
-        let promptWithSeed = "\(enhancedPrompt) #seed:\(randomSeed)"
-        
-        // Format character references according to API spec
-        let formattedCharacterRefs: [String: CharacterIdentity]? = characterReferences.map { urls in
-            ["identity0": CharacterIdentity(images: urls)]
+        if !enhancedPrompt.lowercased().contains("dynamic") {
+            enhancedPrompt += ", dynamic composition"
+        }
+        if !enhancedPrompt.lowercased().contains("dramatic") {
+            enhancedPrompt += ", dramatic lighting"
         }
         
-        // Create request
+        // Generate the keyframe
+        let generatedUrls = try await generateImage(
+            prompt: enhancedPrompt,
+            references: imageRefs,
+            characterReferences: formattedCharacterRefs,
+            styleReferences: styleRefs,
+            numOutputs: 1,
+            guidanceScale: 12.0,
+            steps: 50
+        )
+        
+        guard let keyframeUrl = generatedUrls.first else {
+            throw LumaAIError.generationFailed("No keyframe was generated")
+        }
+        
+        print("DEBUG: Successfully generated keyframe: \(keyframeUrl)")
+        return keyframeUrl
+    }
+    
+    /// Generate both start and end keyframes for a scene
+    /// - Parameters:
+    ///   - startPrompt: The prompt for the start keyframe
+    ///   - endPrompt: The prompt for the end keyframe
+    ///   - visualDescription: Visual description of the scene
+    ///   - references: Optional array of reference images
+    ///   - characterReferences: Optional array of character reference URLs
+    ///   - previousSceneEndKeyframe: Optional URL of the previous scene's end keyframe
+    ///   - scriptOverview: Optional script overview for context
+    /// - Returns: Tuple containing URLs for start and end keyframes
+    func generateSceneKeyframes(
+        startPrompt: String,
+        endPrompt: String,
+        visualDescription: String,
+        references: [ReferenceImage]? = nil,
+        characterReferences: [String]? = nil,
+        previousSceneEndKeyframe: String? = nil,
+        scriptOverview: String? = nil
+    ) async throws -> (start: String, end: String) {
+        print("DEBUG: Starting scene keyframes generation")
+        print("DEBUG: Previous scene end keyframe: \(previousSceneEndKeyframe ?? "none")")
+        print("DEBUG: Character references: \(characterReferences?.count ?? 0)")
+        print("DEBUG: Script Overview: \(scriptOverview ?? "none")")
+        
+        // Generate start keyframe, using previous scene's end keyframe as style reference if available
+        let startKeyframe = try await generateKeyframe(
+            prompt: startPrompt,
+            visualDescription: visualDescription,
+            references: references,
+            characterReferences: characterReferences,
+            styleReference: previousSceneEndKeyframe,
+            isEndKeyframe: false,
+            scriptOverview: scriptOverview
+        )
+        
+        // Generate end keyframe using start keyframe as style reference for consistency
+        let endKeyframe = try await generateKeyframe(
+            prompt: endPrompt,
+            visualDescription: visualDescription,
+            references: references,
+            characterReferences: characterReferences,
+            styleReference: startKeyframe, // Always use start keyframe as style reference
+            isEndKeyframe: true,
+            scriptOverview: scriptOverview
+        )
+        
+        return (start: startKeyframe, end: endKeyframe)
+    }
+    
+    // MARK: - Scene Video Generation
+    
+    /// Generate a video for a scene using the start and end keyframes
+    /// - Parameters:
+    ///   - scene: The scene to generate video for
+    ///   - startKeyframe: The starting keyframe
+    ///   - endKeyframe: The ending keyframe
+    ///   - visualDescription: Visual style description
+    /// - Returns: URL of the generated video
+    func generateSceneVideo(
+        scene: StoryScene,
+        startKeyframe: Keyframe,
+        endKeyframe: Keyframe,
+        visualDescription: String
+    ) async throws -> URL {
+        // Create a simplified, focused prompt
+        let prompt = "\(scene.content) \(visualDescription)"
+        
+        // Create keyframes dictionary
+        let keyframes: [String: Keyframe] = [
+            "frame0": .init(type: "image", url: startKeyframe.url),
+            "frame1": .init(type: "image", url: endKeyframe.url)
+        ]
+        
+        print("DEBUG: Generating video for scene with prompt: \(prompt)")
+        
+        // Generate the video
+        return try await generateVideo(
+            prompt: prompt,
+            keyframes: keyframes
+        )
+    }
+    
+    /// Get the API key for making Luma AI API requests
+    func getApiKeyForRequest() -> String {
+        return apiKey
+    }
+    
+    // MARK: - Private Methods
+    private func createGeneration(
+        prompt: String,
+        references: [ReferenceImage]?,
+        characterReferences: [String: CharacterIdentity]?,
+        styleReferences: [ReferenceImage]? = nil,
+        numOutputs: Int,
+        guidanceScale: Double,
+        steps: Int
+    ) async throws -> String {
+        print("DEBUG: Creating generation with prompt: \(prompt)")
+        print("DEBUG: Character references: \(String(describing: characterReferences))")
+        print("DEBUG: Style references: \(String(describing: styleReferences))")
+        
+        // Format character references to use identity0 as per Luma AI docs
+        var formattedCharacterRefs: [String: CharacterIdentity]?
+        if let charRefs = characterReferences {
+            // Combine all images into identity0 with increased weight
+            let allImages = charRefs.values.flatMap { $0.images }
+            if !allImages.isEmpty {
+                formattedCharacterRefs = ["identity0": CharacterIdentity(images: allImages, weight: 0.7)]
+                print("DEBUG: Formatted character references with identity0 and weight 0.7: \(String(describing: formattedCharacterRefs))")
+            }
+        }
+        
+        // Ensure style references have appropriate weights
+        let adjustedStyleRefs = styleReferences?.map { ref in
+            ReferenceImage(
+                url: ref.url,
+                prompt: ref.prompt ?? "maintain consistent style",
+                weight: 0.6 // Reduced weight for more experimentation
+            )
+        }
+        
         let request = GenerationRequest(
-            prompt: promptWithSeed,
+            prompt: prompt,
             image_ref: references,
             character_ref: formattedCharacterRefs,
+            style_ref: adjustedStyleRefs,
             num_images: numOutputs,
             guidance_scale: guidanceScale,
             steps: steps
         )
+        
+        guard let url = URL(string: "\(Constants.baseUrl)/image") else {
+            throw LumaAIError.invalidResponse
+        }
         
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
@@ -323,6 +604,7 @@ actor LumaAIService {
                 print("DEBUG: Request body: \(requestBody)")
             }
         } catch {
+            print("DEBUG: Encoding error: \(error)")
             throw LumaAIError.networkError(error)
         }
         
@@ -457,7 +739,7 @@ actor LumaAIService {
     private func createVideoGeneration(
         prompt: String,
         references: [ReferenceImage]?,
-        characterReferences: [String]?,
+        characterReferences: [String: CharacterIdentity]?,
         guidanceScale: Double,
         steps: Int
     ) async throws -> String {
@@ -481,18 +763,13 @@ actor LumaAIService {
         let randomSeed = Int.random(in: 1...1000000)
         let promptWithSeed = "\(enhancedPrompt) #seed:\(randomSeed)"
         
-        // Format character references according to API spec
-        let formattedCharacterRefs: [String: CharacterIdentity]? = characterReferences.map { urls in
-            ["identity0": CharacterIdentity(images: urls)]
-        }
+        // Extract reference URLs from character references
+        let referenceUrls = characterReferences?.values.flatMap { $0.images } ?? []
         
-        // Create request
+        // Create request with empty keyframes (will be set in generateVideo function)
         let request = VideoGenerationRequest(
             prompt: promptWithSeed,
-            image_ref: references,
-            character_ref: formattedCharacterRefs,
-            guidance_scale: guidanceScale,
-            steps: steps
+            keyframes: [:]
         )
         
         var urlRequest = URLRequest(url: url)
@@ -618,5 +895,51 @@ actor LumaAIService {
         }
         
         throw LumaAIError.videoGenerationFailed("Video generation timed out")
+    }
+    
+    private func formatCharacterReferences(_ characterReferences: [String]) async throws -> [String: CharacterIdentity] {
+        var formattedCharacterRefs: [String: CharacterIdentity] = [:]
+        for (index, ref) in characterReferences.enumerated() {
+            guard let url = URL(string: ref), url.scheme != nil else {
+                throw LumaAIError.videoGenerationFailed("Invalid character reference URL: \(ref)")
+            }
+            let characterId = "character_\(index + 1)"
+            formattedCharacterRefs[characterId] = CharacterIdentity(images: [ref])
+        }
+        print("DEBUG: Formatted character references: \(String(describing: formattedCharacterRefs))")
+        return formattedCharacterRefs
+    }
+    
+    /// Extract generation ID from a video URL
+    /// - Parameter url: The video URL
+    /// - Returns: The generation ID
+    func getGenerationIdFromUrl(_ url: URL) async throws -> String {
+        print("DEBUG: Extracting generation ID from URL: \(url)")
+        
+        // First, try to extract from Luma API URL format
+        if url.host == "api.lumalabs.ai" {
+            let components = url.pathComponents
+            guard let generationId = components.last else {
+                print("ERROR: Invalid URL format, cannot extract generation ID")
+                throw LumaAIError.invalidResponse
+            }
+            return generationId
+        }
+        
+        // If it's a CDN URL, extract from filename
+        // Format: {generationId}_result{hash}.mp4
+        let filename = url.lastPathComponent
+        let components = filename.split(separator: "_")
+        guard components.count >= 2,
+              let generationId = components.first else {
+            print("ERROR: Invalid CDN URL format")
+            throw LumaAIError.invalidResponse
+        }
+        
+        let id = String(generationId)
+        print("DEBUG: Extracted generation ID: \(id)")
+        
+        // No need to verify the ID for CDN URLs as they are already verified
+        return id
     }
 } 

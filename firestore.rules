@@ -48,13 +48,18 @@ service cloud.firestore {
     // Characters collection rules
     match /characters/{characterId} {
       allow read: if isAuthenticated();
-      
       allow create: if isAuthenticated() && hasRequiredCharacterFields();
-      
       allow update: if isAuthenticated() && 
                       request.resource.data.userId == resource.data.userId &&
                       request.auth.uid == resource.data.userId;
-      
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    // Reference images collection rules
+    match /reference_images/{imageId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId;
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
     
@@ -140,6 +145,22 @@ service cloud.firestore {
                      && isValidReferenceText();
         allow delete: if isAuthenticated() && isOwner(userId);
       }
+
+      // User's characters subcollection
+      match /characters/{characterId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && isOwner(userId);
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // User's reference images subcollection
+      match /reference_images/{imageId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && isOwner(userId);
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
     }
     
     // User's posts subcollection
@@ -151,9 +172,49 @@ service cloud.firestore {
                    && request.auth.uid == resource.data.userId;
     }
     
+    // AI Scripts collection rules
+    match /ai_scripts/{scriptId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() 
+                   && request.auth.uid == resource.data.userId
+                   && (!('sceneVideos' in request.resource.data) 
+                       || (request.resource.data.sceneVideos is list 
+                           && request.resource.data.sceneVideos.size() >= 0));
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      
+      // Add rules for scene videos subcollection
+      match /scene_videos/{videoId} {
+        allow read: if isAuthenticated() && request.auth.uid == get(/databases/$(database)/documents/ai_scripts/$(scriptId)).data.userId;
+        allow create: if isAuthenticated() 
+                     && request.auth.uid == get(/databases/$(database)/documents/ai_scripts/$(scriptId)).data.userId
+                     && isValidSceneVideo();
+        allow update: if isAuthenticated() 
+                     && request.auth.uid == get(/databases/$(database)/documents/ai_scripts/$(scriptId)).data.userId
+                     && isValidSceneVideo();
+        allow delete: if isAuthenticated() 
+                     && request.auth.uid == get(/databases/$(database)/documents/ai_scripts/$(scriptId)).data.userId;
+      }
+    }
+    
+    // Helper function for scene video validation
+    function isValidSceneVideo() {
+      let video = request.resource.data;
+      return video.keys().hasAll(['sceneIndex', 'videoUrl', 'duration', 'status', 'metadata'])
+             && video.sceneIndex is number
+             && video.videoUrl is string 
+             && video.videoUrl.size() > 0
+             && video.duration is number 
+             && video.duration > 0
+             && video.status is map
+             && 'type' in video.status
+             && video.status.type in ['not_started', 'in_progress', 'completed', 'failed']
+             && video.metadata is map;
+    }
+    
     // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
   }
-} 
+} v

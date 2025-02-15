@@ -196,10 +196,10 @@ struct VideoGenerationView: View {
         // Add reference image instructions explicitly
         if !selectedImageUrls.isEmpty {
             prompt += "\n\nReference Images Instructions:"
-            prompt += "\n- Use the provided reference images as strong visual guides"
-            prompt += "\n- Maintain consistent style and aesthetics with the reference images"
-            prompt += "\n- Adapt the historical elements and details from the references"
-            prompt += "\n- Keep character appearances consistent with reference images"
+            prompt += "\n- Use the provided reference images as strict visual guides"
+            prompt += "\n- Maintain exact character appearance and proportions throughout"
+            prompt += "\n- Keep character features, clothing, and details perfectly consistent"
+            prompt += "\n- Adapt historical elements while preserving character identity"
         }
         
         // Add selected reference text content with lower weight
@@ -213,18 +213,23 @@ struct VideoGenerationView: View {
         
         // Add style hints optimized for Luma AI
         prompt += "\n\nStyle requirements:"
-        prompt += "\n- Create a cinematic, high-quality video with professional cinematography"
-        prompt += "\n- Use dramatic lighting and smooth camera movements"
-        prompt += "\n- Maintain consistent visual style throughout the sequence"
-        prompt += "\n- Focus on historical accuracy and period-appropriate details"
-        prompt += "\n- Ensure clear subject focus and composition"
+        prompt += "\n- Create clear, high-quality video with near-static scenes"
+        prompt += "\n- Use perfectly stable, well-lit scenes with zero camera movement"
+        prompt += "\n- Maintain exact visual consistency between frames"
+        prompt += "\n- Focus on historical accuracy with clear, uncluttered details"
+        prompt += "\n- Ensure strong subject focus with minimal to no background elements"
+        prompt += "\n- Keep character appearance perfectly consistent throughout"
         
         // Add technical quality requirements
         prompt += "\n\nTechnical requirements:"
-        prompt += "\n- High resolution and sharp details"
-        prompt += "\n- Smooth and natural motion"
-        prompt += "\n- Professional color grading"
-        prompt += "\n- Stable and well-composed shots"
+        prompt += "\n- High resolution with sharp, clear details"
+        prompt += "\n- Absolute minimum motion, only essential micro-movements"
+        prompt += "\n- Clean, balanced, centered composition"
+        prompt += "\n- Perfectly stable framing with no camera effects"
+        prompt += "\n- Maximum 1-2 elements/characters in each scene"
+        prompt += "\n- No floating artifacts, partial elements, or background complexity"
+        prompt += "\n- Maintain exact character proportions and features"
+        prompt += "\n- Consistent lighting and perspective across all frames"
         
         print("DEBUG: Generated prompt for video: \(prompt)")
         print("DEBUG: Using \(selectedImageUrls.count) reference images for generation")
@@ -264,7 +269,7 @@ struct VideoGenerationView: View {
                 // Generate video
                 let videoUrl = try await lumaService.generateVideo(
                     prompt: prompt,
-                    references: references
+                    keyframes: [:] // Empty keyframes dictionary since this is a simple video generation
                 )
                 
                 // Download video to local temporary URL

@@ -250,10 +250,17 @@ import FirebaseFirestore
             combinedPrompt += ". Maintain the exact same character identity, appearance, and style."
             combinedPrompt += ". High quality, detailed character design, professional concept art"
             
+            // Format character references into the required dictionary format
+            var formattedCharacterRefs: [String: LumaAIService.CharacterIdentity] = [:]
+            if !selectedImages.isEmpty {
+                formattedCharacterRefs["identity0"] = LumaAIService.CharacterIdentity(images: selectedImages)
+                print("DEBUG: Formatted character references with identity0: \(formattedCharacterRefs)")
+            }
+            
             // Generate using character references
             let generatedUrls = try await lumaService.generateImage(
                 prompt: combinedPrompt,
-                characterReferences: selectedImages,
+                characterReferences: formattedCharacterRefs,
                 numOutputs: 2,
                 guidanceScale: 12.0,
                 steps: 50
