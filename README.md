@@ -6,10 +6,36 @@
 ### AI User Stories
 #### 1. AI-Generated Video Creation
 ***User Story:***: "As a user, I want to be able to create AI-generated short-form clips based on the story drafts and resources I've uploaded."
-- Using Luma Ray 1.6
+
+**Implemented:**
+- Mini AI feature: script and scene generation by OpenAI GPT-4 that is then used to set up the storyboard and generate keyframes and videos
+- Scene-by-scene video generation using Luma Ray 1.6
+- Keyframe generation with character consistency
+- Video interpolation between keyframes
+- Optimized prompts for minimal motion and artifacts
+- Video compression and optimization
+- Generation progress tracking
+- Error handling and retry logic
+- Video metadata management
+- Efficient caching and storage
+- Scene concatenation with transitions (Cloudinary)
+
 #### 2. AI-Generated Character Creation
 ***User Story***: "As a user, I want to be able to create AI characters for my stories using reference images and descriptions, and refine them until they're perfect."
-- Using Luma Photon 1
+
+**Implemented:**
+- Character generation using Luma Photon 1
+- Support for up to 4 reference images with individual prompts and weights
+- Character refinement with style consistency
+- Advanced prompt optimization
+- Character version history
+- Metadata management in Firestore
+- Image processing and compression
+- Character persistence across stories
+- Debug logging for generation process
+- Error handling and retry mechanisms
+- Efficient image caching
+
 ### 1. User Authentication & Profiles
 **User Story:** "As a user, I want to sign up and manage my profile so I can create and interact with content."
 
